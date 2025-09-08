@@ -1,0 +1,359 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/jugadores_provider.dart';
+import '../models/jugador.dart';
+
+class DatosScreen extends ConsumerStatefulWidget {
+  const DatosScreen({super.key});
+
+  @override
+  ConsumerState<DatosScreen> createState() => _DatosScreenState();
+}
+
+class _DatosScreenState extends ConsumerState<DatosScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _nombreCtrl = TextEditingController();
+  final _hpCtrl = TextEditingController(text: '0');
+  final _maxHpCtrl = TextEditingController(text: '10'); // Nuevo controlador para maxHp
+  final _acCtrl = TextEditingController(text: '10');
+  final _xpCtrl = TextEditingController(text: '0');
+  final _nivelCtrl = TextEditingController(text: '1');
+  bool _esEnemigo = false;
+
+  @override
+  void dispose() {
+    _nombreCtrl.dispose();
+    _hpCtrl.dispose();
+    _acCtrl.dispose();
+    _xpCtrl.dispose();
+    _nivelCtrl.dispose();
+    _maxHpCtrl.dispose(); // Liberar el controlador
+    super.dispose();
+  }
+
+  int _toInt(String s, int fallback) => int.tryParse(s.trim()) ?? fallback;
+
+  void _limpiarFormulario() {
+    _nombreCtrl.clear();
+    _hpCtrl.text = '0';
+    _maxHpCtrl.text = '10';
+    _acCtrl.text = '10';
+    _xpCtrl.text = '0';
+    _nivelCtrl.text = '1';
+    setState(() => _esEnemigo = false);
+  }
+
+  void _agregarJugador() {
+    if (_formKey.currentState!.validate()) {
+      final nuevo = Jugador(
+        nombre: _nombreCtrl.text.trim(),
+        hp: _toInt(_hpCtrl.text, 0),
+        maxHp: _toInt(_maxHpCtrl.text, 10), // Asignar maxHp
+        ac: _toInt(_acCtrl.text, 10),
+        nivel: _toInt(_nivelCtrl.text, 1),
+        xp: _toInt(_xpCtrl.text, 0),
+        esEnemigo: _esEnemigo,
+        accionesClase: 0,
+        accionesHeroicas: 0,
+        danoHecho: 0,
+      );
+      ref.read(jugadoresProvider.notifier).agregarJugador(nuevo);
+      _limpiarFormulario();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Jugador añadido')),
+      );
+    }
+  }
+
+  void _editarJugadorDialog(int index, Jugador j) {
+    final nombre = TextEditingController(text: j.nombre);
+    final hp = TextEditingController(text: j.hp.toString());
+    final maxHp = TextEditingController(text: j.maxHp.toString()); // Nuevo campo
+    final ac = TextEditingController(text: j.ac.toString());
+    final nivel = TextEditingController(text: j.nivel.toString());
+    final xp = TextEditingController(text: j.xp.toString());
+    bool esEnemigo = j.esEnemigo;
+
+    showDialog(
+      context: context,
+      builder: (_) {
+        return StatefulBuilder(
+          builder: (context, setState) => AlertDialog(
+            title: Text('Editar ${j.nombre}'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nombre,
+                    decoration: const InputDecoration(labelText: 'Nombre'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: hp,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'HP'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: maxHp,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'HP Máximo'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: ac,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'AC'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: nivel,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Nivel'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: xp,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'XP total'),
+                  ),
+                  const SizedBox(height: 8),
+                  SwitchListTile(
+                    value: esEnemigo,
+                    onChanged: (v) => setState(() => esEnemigo = v),
+                    title: const Text('¿Es enemigo?'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  ref.read(jugadoresProvider.notifier).eliminarJugador(index);
+                  Navigator.pop(context);
+                },
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('Eliminar'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  final actualizado = j.copyWith(
+                    nombre: nombre.text.trim().isEmpty ? j.nombre : nombre.text.trim(),
+                    hp: _toInt(hp.text, j.hp),
+                    maxHp: _toInt(maxHp.text, j.maxHp), // Actualizar maxHp
+                    ac: _toInt(ac.text, j.ac),
+                    nivel: _toInt(nivel.text, j.nivel),
+                    xp: _toInt(xp.text, j.xp),
+                    esEnemigo: esEnemigo,
+                  );
+                  ref.read(jugadoresProvider.notifier).actualizarJugador(index, actualizado);
+                  Navigator.pop(context);
+                },
+                child: const Text('Guardar'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final jugadores = ref.watch(jugadoresProvider);
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFFAF3E0), // Fondo pergamino claro
+      appBar: AppBar(
+        title: const Text('Datos de Jugadores'),
+        backgroundColor: const Color(0xFFB68D40), // Marrón dorado
+        foregroundColor: Colors.white,
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(12),
+        children: [
+          // --- Formulario para añadir jugador ---
+          Card(
+            color: const Color(0xFFF5E6CA),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            elevation: 4,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  children: [
+                    const Text(
+                      'Añadir jugador / enemigo',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'NotoSerifJP',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Campo Nombre
+                    TextFormField(
+                      controller: _nombreCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Nombre',
+                        prefixIcon: Icon(Icons.person, color: Colors.brown),
+                      ),
+                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Pon un nombre' : null,
+                    ),
+                    const SizedBox(height: 8),
+
+                    // HP, HP Máximo y AC
+                    Row(
+                      children: [
+                      Expanded(
+                        child: TextFormField(
+                        controller: _hpCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'HP',
+                          prefixIcon: Icon(Icons.favorite, color: Colors.red),
+                        ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextFormField(
+                        controller: _maxHpCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'HP Máximo',
+                          prefixIcon: Icon(Icons.favorite_border, color: Colors.redAccent),
+                        ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextFormField(
+                        controller: _acCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'AC',
+                          prefixIcon: Icon(Icons.shield, color: Colors.blue),
+                        ),
+                        ),
+                      ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Nivel y XP
+                    Row(
+                      children: [
+                      Expanded(
+                        child: TextFormField(
+                        controller: _nivelCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Nivel',
+                          prefixIcon: Icon(Icons.star, color: Colors.amber),
+                        ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextFormField(
+                        controller: _xpCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'XP total',
+                          prefixIcon: Icon(Icons.flash_on, color: Colors.orange),
+                        ),
+                        ),
+                      ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Switch ¿Es enemigo?
+                    SwitchListTile(
+                      value: _esEnemigo,
+                      onChanged: (v) => setState(() => _esEnemigo = v),
+                      title: const Text('¿Es enemigo?'),
+                    ),
+                    const SizedBox(height: 4),
+
+                    // Botones
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFB68D40),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            icon: const Icon(Icons.person_add),
+                            onPressed: _agregarJugador,
+                            label: const Text('Añadir'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        OutlinedButton(
+                          onPressed: _limpiarFormulario,
+                          child: const Text('Limpiar'),
+                        )
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // --- Lista de jugadores ---
+          if (jugadores.isEmpty)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24.0),
+                child: Text(
+                  'Aún no hay personajes. Agrega el primero arriba.',
+                  style: TextStyle(fontFamily: 'NotoSerifJP'),
+                ),
+              ),
+            )
+          else
+            ...List.generate(jugadores.length, (index) {
+              final j = jugadores[index];
+              return Card(
+                color: const Color(0xFFF5E6CA),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: j.esEnemigo ? Colors.red[300] : Colors.green[300],
+                    child: Text(
+                      j.nombre.isNotEmpty ? j.nombre[0].toUpperCase() : '?',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  title: Text(j.nombre, style: const TextStyle(fontFamily: 'NotoSerifJP')),
+                  subtitle: Text(
+                    'HP: ${j.hp} | AC: ${j.ac} | Nivel: ${j.nivel} | XP: ${j.xp}',
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                  trailing: j.esEnemigo
+                      ? const Icon(Icons.close, color: Colors.red)
+                      : const Icon(Icons.check, color: Colors.green),
+                  onTap: () => _editarJugadorDialog(index, j),
+                ),
+              );
+            }),
+          const SizedBox(height: 80),
+        ],
+      ),
+    );
+  }
+}
