@@ -80,6 +80,9 @@ void calcularXPFinal({
     // Actualizar los valores del jugador
     jugador.gainedxp = (nuevaXP - jugador.xp);
     jugador.xp = nuevaXP;
+    jugador.xpAcumulada += jugador.gainedxp;
   }
 }
+
+
 
