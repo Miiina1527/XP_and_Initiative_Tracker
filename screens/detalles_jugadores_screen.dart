@@ -7,7 +7,7 @@ class DetallesJugadoresScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final jugadores = ref.watch(jugadoresProvider);
+    final jugadores = ref.watch(jugadoresProvider).where((j) => !j.esEnemigo).toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -81,7 +81,9 @@ class DetallesJugadoresScreen extends ConsumerWidget {
 
                     _buildStatRow(Icons.shield, "AC", jugador.ac.toString()),
                     _buildStatRow(Icons.star, "Nivel", jugador.nivel.toString()),
-
+                    _buildStatRow(Icons.star_border, "Nivel Clase 1", jugador.nivelClase1.toString()),
+                    _buildStatRow(Icons.star_border, "Nivel Clase 2", jugador.nivelClase2.toString()),
+                    _buildStatRow(Icons.star_border, "Nivel Clase 3", jugador.nivelClase3.toString()),
                     _buildStatRow(
                         Icons.flash_on, "Iniciativa", jugador.iniciativa.toString()),
 

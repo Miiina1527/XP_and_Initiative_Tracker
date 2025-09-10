@@ -17,7 +17,9 @@ class _DatosScreenState extends ConsumerState<DatosScreen> {
   final _maxHpCtrl = TextEditingController(text: '10'); // Nuevo controlador para maxHp
   final _acCtrl = TextEditingController(text: '10');
   final _xpCtrl = TextEditingController(text: '0');
-  final _nivelCtrl = TextEditingController(text: '1');
+  final _nivelClase1Ctrl = TextEditingController(text: '1');
+  final _nivelClase2Ctrl = TextEditingController(text: '0');
+  final _nivelClase3Ctrl = TextEditingController(text: '0');
   bool _esEnemigo = false;
 
   @override
@@ -26,7 +28,9 @@ class _DatosScreenState extends ConsumerState<DatosScreen> {
     _hpCtrl.dispose();
     _acCtrl.dispose();
     _xpCtrl.dispose();
-    _nivelCtrl.dispose();
+    _nivelClase1Ctrl.dispose();
+    _nivelClase2Ctrl.dispose();
+    _nivelClase3Ctrl.dispose();
     _maxHpCtrl.dispose(); // Liberar el controlador
     super.dispose();
   }
@@ -39,7 +43,9 @@ class _DatosScreenState extends ConsumerState<DatosScreen> {
     _maxHpCtrl.text = '10';
     _acCtrl.text = '10';
     _xpCtrl.text = '0';
-    _nivelCtrl.text = '1';
+    _nivelClase1Ctrl.text = '1';
+    _nivelClase2Ctrl.text = '0';
+    _nivelClase3Ctrl.text = '0';
     setState(() => _esEnemigo = false);
   }
 
@@ -50,7 +56,9 @@ class _DatosScreenState extends ConsumerState<DatosScreen> {
         hp: _toInt(_hpCtrl.text, 0),
         maxHp: _toInt(_maxHpCtrl.text, 10), // Asignar maxHp
         ac: _toInt(_acCtrl.text, 10),
-        nivel: _toInt(_nivelCtrl.text, 1),
+        nivelClase1: _toInt(_nivelClase1Ctrl.text, 1),
+        nivelClase2: _toInt(_nivelClase2Ctrl.text, 0),
+        nivelClase3: _toInt(_nivelClase3Ctrl.text, 0),
         xp: _toInt(_xpCtrl.text, 0),
         esEnemigo: _esEnemigo,
         accionesClase: 0,
@@ -70,7 +78,9 @@ class _DatosScreenState extends ConsumerState<DatosScreen> {
     final hp = TextEditingController(text: j.hp.toString());
     final maxHp = TextEditingController(text: j.maxHp.toString()); // Nuevo campo
     final ac = TextEditingController(text: j.ac.toString());
-    final nivel = TextEditingController(text: j.nivel.toString());
+    final nivelClase1 = TextEditingController(text: j.nivelClase1.toString());
+    final nivelClase2 = TextEditingController(text: j.nivelClase2.toString());
+    final nivelClase3 = TextEditingController(text: j.nivelClase3.toString());
     final xp = TextEditingController(text: j.xp.toString());
     bool esEnemigo = j.esEnemigo;
 
@@ -108,7 +118,17 @@ class _DatosScreenState extends ConsumerState<DatosScreen> {
                   ),
                   const SizedBox(height: 8),
                   TextField(
-                    controller: nivel,
+                    controller: nivelClase1,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Nivel'),
+                  ),
+                  TextField(
+                    controller: nivelClase2,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Nivel'),
+                  ),
+                  TextField(
+                    controller: nivelClase3,
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(labelText: 'Nivel'),
                   ),
@@ -148,7 +168,9 @@ class _DatosScreenState extends ConsumerState<DatosScreen> {
                     hp: _toInt(hp.text, j.hp),
                     maxHp: _toInt(maxHp.text, j.maxHp), // Actualizar maxHp
                     ac: _toInt(ac.text, j.ac),
-                    nivel: _toInt(nivel.text, j.nivel),
+                    nivelClase1: _toInt(nivelClase1.text, j.nivelClase1),
+                    nivelClase2: _toInt(nivelClase2.text, j.nivelClase2),
+                    nivelClase3: _toInt(nivelClase3.text, j.nivelClase3),
                     xp: _toInt(xp.text, j.xp),
                     esEnemigo: esEnemigo,
                   );
@@ -249,41 +271,70 @@ class _DatosScreenState extends ConsumerState<DatosScreen> {
                     ),
                     const SizedBox(height: 8),
 
-                    // Nivel y XP
+                    // Nivel por clase (en una sola fila)
                     Row(
                       children: [
-                      Expanded(
-                        child: TextFormField(
-                        controller: _nivelCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Nivel',
-                          prefixIcon: Icon(Icons.star, color: Colors.amber),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _nivelClase1Ctrl,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Nivel Clase 1',
+                              prefixIcon: Icon(Icons.star, color: Colors.amber),
+                            ),
+                          ),
                         ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _nivelClase2Ctrl,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Nivel Clase 2',
+                              prefixIcon: Icon(Icons.star, color: Colors.pink),
+                            ),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: TextFormField(
-                        controller: _xpCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'XP total',
-                          prefixIcon: Icon(Icons.flash_on, color: Colors.orange),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _nivelClase3Ctrl,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Nivel Clase 3',
+                              prefixIcon: Icon(Icons.star, color: Colors.cyan),
+                            ),
+                          ),
                         ),
-                        ),
-                      ),
                       ],
                     ),
                     const SizedBox(height: 8),
 
-                    // Switch ¿Es enemigo?
-                    SwitchListTile(
-                      value: _esEnemigo,
-                      onChanged: (v) => setState(() => _esEnemigo = v),
-                      title: const Text('¿Es enemigo?'),
+                    // XP y Switch ¿Es enemigo? (en una sola fila)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _xpCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'XP total',
+                              prefixIcon: Icon(Icons.flash_on, color: Colors.orange),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: SwitchListTile(
+                            value: _esEnemigo,
+                            onChanged: (v) => setState(() => _esEnemigo = v),
+                            title: const Text('¿Es enemigo?'),
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 8),
 
                     // Botones
                     Row(

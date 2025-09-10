@@ -231,11 +231,11 @@ class TurnoScreen extends ConsumerWidget {
     final int crEnemigo = calcularCREnemigos(jugadores);
     final int crParty = calcularCRParty(jugadores);
 
-    jugadoresNotifier.guardarYReiniciarAcciones();
     jugadoresNotifier.calcularYAcumularXpCombate(
       crEnemigos: crEnemigo,
       crParty: crParty,
     );
+    jugadoresNotifier.guardarYReiniciarAcciones();
     jugadoresNotifier.eliminarEnemigos();
     ref.read(combateProvider.notifier).terminarCombate();
     Navigator.pop(context);
