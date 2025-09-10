@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:hive/hive.dart';
 import 'package:hive_flutter/adapters.dart';
 import 'package:xp_and_initiative_tracker/models/jugador.dart';
 import 'screens/datos_screen.dart';
@@ -9,6 +8,8 @@ import 'screens/sesion_screen.dart';
 import 'screens/acciones_screen.dart';
 import 'screens/iniciativa_screen.dart';
 import 'screens/detalles_jugadores_screen.dart';
+import 'screens/fondos_screen.dart';
+import 'dart:typed_data';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,6 +18,7 @@ void main() async {
   Hive.registerAdapter(JugadorAdapter()); // tu clase adaptadora generada
 
   await Hive.openBox<Jugador>('jugadores');
+  await Hive.openBox<Jugador>('enemigos_plantilla');
 
   runApp(
     const ProviderScope(
@@ -46,33 +48,58 @@ class PathfinderTrackerApp extends StatelessWidget {
         '/iniciativa': (_) => const IniciativaScreen(),
         '/acciones': (_) => const AccionesScreen(),
         '/detalles': (_) => const DetallesJugadoresScreen(),
+        '/fondos': (_) => const FondosScreen(),
       },
     );
   }
 }
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  Uint8List? fondoHome;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFondo();
+  }
+
+  Future<void> _loadFondo() async {
+    final box = await Hive.openBox('fondos');
+    setState(() {
+      fondoHome = box.get('fondoHome');
+      _loading = false;
+    });
+  }
+
+  Future<void> _goToFondosScreen(BuildContext context) async {
+    await Navigator.pushNamed(context, '/fondos');
+    // Al volver de fondos_screen, recargar fondo
+    _loadFondo();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Stack(
         children: [
-          // Fondo negro + imagen tenue
-          Container(color: Colors.black),
-          Opacity(
-            opacity: 0.2,
-            child: SizedBox(
-              width: MediaQuery.of(context).size.width, // Ancho del dispositivo
-              height: MediaQuery.of(context).size.height, // Alto del dispositivo
-              child: Image.asset(
-                "images/fondo.jpeg",
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
-          // Contenido
+          _loading
+              ? Container(color: Colors.black)
+              : (fondoHome != null
+                  ? Image.memory(
+                      fondoHome!,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                    )
+                  : Container(color: Colors.black)),
           Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -106,6 +133,12 @@ class HomeScreen extends StatelessWidget {
                   text: "Detalles de Jugadores",
                   onTap: () => Navigator.pushNamed(context, '/detalles'),
                 ),
+                const SizedBox(height: 14),
+                MenuButton(
+                  icon: Icons.people,
+                  text: "Fondo de Pantalla",
+                  onTap: () => _goToFondosScreen(context),
+                ),
               ],
             ),
           ),
@@ -138,7 +171,9 @@ class MenuButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
+          // ignore: deprecated_member_use
           splashColor: Colors.redAccent.withOpacity(0.5), // tinta roja
+          // ignore: deprecated_member_use
           highlightColor: Colors.red.withOpacity(0.2),
           onTap: onTap,
           child: Row(
