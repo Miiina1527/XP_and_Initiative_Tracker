@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/jugadores_provider.dart';
 import '../models/jugador.dart';
+import 'monsterdb_screen.dart';
 
 class DatosScreen extends ConsumerStatefulWidget {
   const DatosScreen({super.key});
@@ -403,6 +404,58 @@ class _DatosScreenState extends ConsumerState<DatosScreen> {
               );
             }),
           const SizedBox(height: 80),
+          // Botón para abrir MonsterDbScreen como popup
+          Align(
+            alignment: Alignment.bottomRight,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 24, right: 24),
+              child: FloatingActionButton(
+                backgroundColor: Colors.red.shade700.withOpacity(0.85),
+                child: const Icon(Icons.auto_awesome, color: Colors.white),
+                onPressed: () async {
+                  await showDialog(
+                    context: context,
+                    barrierColor: Colors.black.withOpacity(0.3),
+                    builder: (context) => Dialog(
+                      backgroundColor: Colors.white.withOpacity(0.95),
+                      insetPadding: const EdgeInsets.all(16),
+                      child: SizedBox(
+                        width: 400,
+                        height: 600,
+                        child: MonsterDbScreen(
+                          onAddMonster: (monsterData) {
+                            final nuevo = Jugador(
+                              nombre: monsterData['nombre'],
+                              hp: monsterData['hp'] ?? 0,
+                              maxHp: monsterData['hp'] ?? 0,
+                              ac: monsterData['ac'] ?? 10,
+                              nivelClase1: monsterData['nivelClase1'] ?? 1,
+                              nivelClase2: monsterData['nivelClase2'] ?? 0,
+                              nivelClase3: monsterData['nivelClase3'] ?? 0,
+                              xp: 0,
+                              esEnemigo: true,
+                              accionesClase: 0,
+                              accionesHeroicas: 0,
+                              danoHecho: 0,
+                              iniciativa: monsterData['iniciativa'] ?? 0,
+                              att: monsterData['att'],
+                              movs: monsterData['movs'],
+                            );
+                            ref.read(jugadoresProvider.notifier).agregarJugador(nuevo);
+                            Navigator.of(context).pop();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('${monsterData['nombre']} añadido como enemigo.')),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  );
+                },
+                tooltip: 'Añadir enemigo desde base de monstruos',
+              ),
+            ),
+          ),
         ],
       ),
     );

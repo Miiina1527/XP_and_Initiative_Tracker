@@ -102,6 +102,10 @@ class TurnoScreen extends ConsumerWidget {
                               Text("🛡️ AC: ${pjActual.ac}   ⭐ Nivel: ${pjActual.nivel}"),
                               Text("⚡ Clase: ${pjActual.accionesClase}   🔥 Heroicas: ${pjActual.accionesHeroicas}"),
                               Text("⚔️ Daño Hecho: ${pjActual.danoHecho}"),
+                              if (pjActual.att != null && pjActual.att!.isNotEmpty)
+                                Text('Ataque: ${pjActual.att}'),
+                              if (pjActual.movs != null && pjActual.movs!.isNotEmpty)
+                                Text('Movs: ${pjActual.movs}'),
                             ],
                           ),
                         ),
