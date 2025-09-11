@@ -1008,5 +1008,5 @@ final List<Map<String, dynamic>> monsterDatabase = [
     'att': 'Foxfire +2 (1d6+2 fire)',
     'movs': 'Illusion, Charm Person, Invisibility',
     'type': 'Japonés'
-  }
+  },
 ];
