@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/adapters.dart';
 import 'package:xp_and_initiative_tracker/models/jugador.dart';
+import 'package:xp_and_initiative_tracker/models/monster.dart'; // <--- AÑADIDO
 import 'screens/datos_screen.dart';
 import 'screens/combate_screen.dart';
 import 'screens/sesion_screen.dart';
@@ -15,10 +16,12 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
 
-  Hive.registerAdapter(JugadorAdapter()); // tu clase adaptadora generada
+  Hive.registerAdapter(JugadorAdapter());
+  Hive.registerAdapter(MonsterAdapter()); // <--- AÑADIDO
 
   await Hive.openBox<Jugador>('jugadores');
   await Hive.openBox<Jugador>('enemigos_plantilla');
+  await Hive.openBox<Monster>('custom_monsters'); // <--- AÑADIDO
 
   runApp(
     const ProviderScope(
@@ -35,7 +38,7 @@ class PathfinderTrackerApp extends StatelessWidget {
     return MaterialApp(
       title: 'Pathfinder XP Tracker',
       theme: ThemeData(
-        fontFamily: 'NotoSerifJP', // fuente japonesa
+        fontFamily: 'NotoSerifJP',
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.red),
       ),
@@ -164,16 +167,14 @@ class MenuButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 250, // ancho controlado
+      width: 250,
       height: 50,
       child: Material(
         color: Colors.red.shade700,
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          // ignore: deprecated_member_use
-          splashColor: Colors.redAccent.withOpacity(0.5), // tinta roja
-          // ignore: deprecated_member_use
+          splashColor: Colors.redAccent.withOpacity(0.5),
           highlightColor: Colors.red.withOpacity(0.2),
           onTap: onTap,
           child: Row(
