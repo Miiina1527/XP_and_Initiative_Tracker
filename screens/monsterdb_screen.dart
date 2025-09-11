@@ -1,189 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../utils/monster_database.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import '../models/monster.dart';
+import '../providers/monstruos_provider.dart';
 
-
-class MonsterDbScreen extends StatefulWidget {
-  final void Function(Map<String, dynamic>)? onAddMonster; // Callback opcional
+class MonsterDbScreen extends ConsumerStatefulWidget {
+  final void Function(Map<String, dynamic>)? onAddMonster;
 
   const MonsterDbScreen({Key? key, this.onAddMonster}) : super(key: key);
 
   @override
-  State<MonsterDbScreen> createState() => _MonsterDbScreenState();
+  ConsumerState<MonsterDbScreen> createState() => _MonsterDbScreenState();
 }
 
-class _MonsterDbScreenState extends State<MonsterDbScreen> {
-  void _editarCustomMonsterDialog(Monster monster) {
-    final nameCtrl = TextEditingController(text: monster.name);
-    final hpCtrl = TextEditingController(text: monster.hp.toString());
-    final acCtrl = TextEditingController(text: monster.ac.toString());
-    final nivelCtrl = TextEditingController(text: monster.nivel.toString());
-    final xpCtrl = TextEditingController(text: monster.xp.toString());
-    final initiativeCtrl = TextEditingController(text: monster.initiative.toString());
-    final attCtrl = TextEditingController(text: monster.att ?? '');
-    final movsCtrl = TextEditingController(text: monster.movs ?? '');
-    final typeCtrl = TextEditingController(text: monster.type);
-
-    showDialog(
-      context: context,
-      builder: (_) {
-        return AlertDialog(
-          title: Text('Editar ${monster.name}'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameCtrl,
-                  decoration: const InputDecoration(labelText: 'Nombre'),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: hpCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'HP'),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: acCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'AC'),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: nivelCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'Nivel'),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: xpCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'XP'),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: initiativeCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'Iniciativa'),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: typeCtrl,
-                        decoration: const InputDecoration(labelText: 'Tipo'),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: attCtrl,
-                        decoration: const InputDecoration(labelText: 'Ataque'),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: movsCtrl,
-                        decoration: const InputDecoration(labelText: 'Movs'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () async {
-                await monster.delete();
-                setState(() {
-                  _customMonsters = _customMonstersBox.values.toList();
-                });
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('${monster.name} eliminado.')),
-                );
-              },
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('Eliminar'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancelar'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (nameCtrl.text.trim().isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('El nombre no puede estar vacío.')),
-                  );
-                  return;
-                }
-                monster.name = nameCtrl.text.trim();
-                monster.hp = int.tryParse(hpCtrl.text) ?? monster.hp;
-                monster.ac = int.tryParse(acCtrl.text) ?? monster.ac;
-                monster.nivel = int.tryParse(nivelCtrl.text) ?? monster.nivel;
-                monster.xp = int.tryParse(xpCtrl.text) ?? monster.xp;
-                monster.initiative = int.tryParse(initiativeCtrl.text) ?? monster.initiative;
-                monster.att = attCtrl.text.trim().isEmpty ? null : attCtrl.text.trim();
-                monster.movs = movsCtrl.text.trim().isEmpty ? null : movsCtrl.text.trim();
-                monster.type = typeCtrl.text.trim();
-                await monster.save();
-                if (mounted) {
-                  setState(() {
-                    _customMonsters = _customMonstersBox.values.toList();
-                  });
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('${monster.name} actualizado.')),
-                  );
-                }
-              },
-              child: const Text('Guardar'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-  late Box<Monster> _customMonstersBox;
-  List<Monster> _customMonsters = [];
-  bool _hiveReady = false;
-  @override
-  void initState() {
-    super.initState();
-    _initHive();
-  }
-
-  Future<void> _initHive() async {
-    _customMonstersBox = await Hive.openBox<Monster>('custom_monsters');
-    setState(() {
-      _customMonsters = _customMonstersBox.values.toList();
-      _hiveReady = true;
-    });
-  }
+class _MonsterDbScreenState extends ConsumerState<MonsterDbScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
   final _hpCtrl = TextEditingController(text: '0');
@@ -194,8 +24,8 @@ class _MonsterDbScreenState extends State<MonsterDbScreen> {
   final _attCtrl = TextEditingController();
   final _movsCtrl = TextEditingController();
   final _typeCtrl = TextEditingController();
-  final _nivelClase2Ctrl = TextEditingController();
-  final _nivelClase3Ctrl = TextEditingController();
+
+  String _searchQuery = '';
 
   @override
   void dispose() {
@@ -208,8 +38,6 @@ class _MonsterDbScreenState extends State<MonsterDbScreen> {
     _attCtrl.dispose();
     _movsCtrl.dispose();
     _typeCtrl.dispose();
-    _nivelClase2Ctrl.dispose();
-    _nivelClase3Ctrl.dispose();
     super.dispose();
   }
 
@@ -223,11 +51,9 @@ class _MonsterDbScreenState extends State<MonsterDbScreen> {
     _attCtrl.clear();
     _movsCtrl.clear();
     _typeCtrl.clear();
-    _nivelClase2Ctrl.clear();
-    _nivelClase3Ctrl.clear();
   }
 
-  void _agregarEnemigoPersonalizado() {
+  void _agregarEnemigoPersonalizado() async {
     if (_formKey.currentState!.validate()) {
       final monster = Monster(
         name: _nameCtrl.text.trim(),
@@ -240,22 +66,185 @@ class _MonsterDbScreenState extends State<MonsterDbScreen> {
         movs: _movsCtrl.text.trim().isEmpty ? null : _movsCtrl.text.trim(),
         type: _typeCtrl.text.trim().isEmpty ? '-' : _typeCtrl.text.trim(),
       );
-      _customMonstersBox.add(monster);
-      setState(() {
-        _customMonsters = _customMonstersBox.values.toList();
-      });
-      _customMonstersBox.flush();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Monstruo personalizado añadido')), 
-      );
+      await ref.read(monstruosProvider.notifier).agregar(monster);
       _limpiarFormulario();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Monstruo personalizado añadido')),
+      );
     }
   }
-  String _searchQuery = '';
+
+  void _editarCustomMonsterDialog(int index, Monster monster) {
+    final nameCtrl = TextEditingController(text: monster.name);
+    final hpCtrl = TextEditingController(text: monster.hp.toString());
+    final acCtrl = TextEditingController(text: monster.ac.toString());
+    final nivelCtrl = TextEditingController(text: monster.nivel.toString());
+    final xpCtrl = TextEditingController(text: monster.xp.toString());
+    final initiativeCtrl = TextEditingController(text: monster.initiative.toString());
+    final attCtrl = TextEditingController(text: monster.att ?? '');
+    final movsCtrl = TextEditingController(text: monster.movs ?? '');
+    final typeCtrl = TextEditingController(text: monster.type);
+
+    showDialog(
+      context: context,
+      builder: (_) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) => AlertDialog(
+            title: Text('Editar ${monster.name}'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameCtrl,
+                    decoration: const InputDecoration(labelText: 'Nombre'),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: hpCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(labelText: 'HP'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: acCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(labelText: 'AC'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: nivelCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(labelText: 'Nivel'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: xpCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(labelText: 'XP'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: initiativeCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(labelText: 'Iniciativa'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: typeCtrl,
+                          decoration: const InputDecoration(labelText: 'Tipo'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: attCtrl,
+                          decoration: const InputDecoration(labelText: 'Ataque'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: movsCtrl,
+                          decoration: const InputDecoration(labelText: 'Movs'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () async {
+                  await ref.read(monstruosProvider.notifier).eliminar(index);
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('${monster.name} eliminado.')),
+                  );
+                },
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('Eliminar'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  if (nameCtrl.text.trim().isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('El nombre no puede estar vacío.')),
+                    );
+                    return;
+                  }
+                  final actualizado = monster.copyWith(
+                    name: nameCtrl.text.trim(),
+                    hp: int.tryParse(hpCtrl.text) ?? monster.hp,
+                    ac: int.tryParse(acCtrl.text) ?? monster.ac,
+                    nivel: int.tryParse(nivelCtrl.text) ?? monster.nivel,
+                    xp: int.tryParse(xpCtrl.text) ?? monster.xp,
+                    initiative: int.tryParse(initiativeCtrl.text) ?? monster.initiative,
+                    att: attCtrl.text.trim().isEmpty ? null : attCtrl.text.trim(),
+                    movs: movsCtrl.text.trim().isEmpty ? null : movsCtrl.text.trim(),
+                    type: typeCtrl.text.trim().isEmpty ? '-' : typeCtrl.text.trim(),
+                  );
+                  await ref.read(monstruosProvider.notifier).editar(index, actualizado);
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('${actualizado.name} actualizado.')),
+                  );
+                },
+                child: const Text('Guardar'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    // --- Formulario para añadir monstruo personalizado ---
+    final customMonsters = ref.watch(monstruosProvider);
+
+    // Filtrar monstruos base
+    final filteredMonsters = monsterDatabase.where((monster) {
+      final query = _searchQuery.toLowerCase();
+      return monster['name'].toLowerCase().contains(query) ||
+          monster['type'].toLowerCase().contains(query) ||
+          (monster['nivel']?.toString() ?? monster['level']?.toString() ?? '').contains(query);
+    }).toList();
+
+    // Filtrar monstruos personalizados
+    final filteredCustomMonsters = customMonsters.where((monster) {
+      final query = _searchQuery.toLowerCase();
+      return monster.name.toLowerCase().contains(query) ||
+          monster.type.toLowerCase().contains(query) ||
+          monster.nivel.toString().contains(query);
+    }).toList();
+
     final addCustomMonsterCard = Card(
       color: const Color(0xFFF5E6CA),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -410,25 +399,7 @@ class _MonsterDbScreenState extends State<MonsterDbScreen> {
         ],
       ),
     );
-    // Filtrar monstruos base
-    final filteredMonsters = monsterDatabase.where((monster) {
-      final query = _searchQuery.toLowerCase();
-      return monster['name'].toLowerCase().contains(query) ||
-          monster['type'].toLowerCase().contains(query) ||
-          (monster['nivel']?.toString() ?? monster['level']?.toString() ?? '').contains(query);
-    }).toList();
 
-    // Filtrar monstruos personalizados
-    final filteredCustomMonsters = _customMonsters.where((monster) {
-      final query = _searchQuery.toLowerCase();
-      return monster.name.toLowerCase().contains(query) ||
-          monster.type.toLowerCase().contains(query) ||
-          monster.nivel.toString().contains(query);
-    }).toList();
-
-    if (!_hiveReady) {
-      return const Center(child: CircularProgressIndicator());
-    }
     return Scaffold(
       appBar: AppBar(
         title: const Text('Base de Datos de Monstruos'),
@@ -455,90 +426,94 @@ class _MonsterDbScreenState extends State<MonsterDbScreen> {
             child: ListView(
               children: [
                 // Monstruos personalizados primero
-                ...filteredCustomMonsters.map((monster) => GestureDetector(
-                  onTap: () => _editarCustomMonsterDialog(monster),
-                  child: Card(
-                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    child: Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              CircleAvatar(
-                                child: Text(monster.name.isNotEmpty ? monster.name[0].toUpperCase() : '?'),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  monster.name,
-                                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ...filteredCustomMonsters.asMap().entries.map((entry) {
+                  final i = entry.key;
+                  final monster = entry.value;
+                  return GestureDetector(
+                    onTap: () => _editarCustomMonsterDialog(i, monster),
+                    child: Card(
+                      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                CircleAvatar(
+                                  child: Text(monster.name.isNotEmpty ? monster.name[0].toUpperCase() : '?'),
                                 ),
-                              ),
-                              ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.red,
-                                  foregroundColor: Colors.white,
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    monster.name,
+                                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                  ),
                                 ),
-                                onPressed: () {
-                                  final playerData = <String, dynamic>{
-                                    'nombre': monster.name,
-                                    'nivelClase1': monster.nivel,
-                                    'hp': monster.hp,
-                                    'maxHp': monster.hp,
-                                    'ac': monster.ac,
-                                    'iniciativa': monster.initiative,
-                                    'att': monster.att,
-                                    'movs': monster.movs,
-                                  };
-                                  if (widget.onAddMonster != null) {
-                                    widget.onAddMonster!(playerData);
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('${monster.name} añadido como jugador.')),
-                                    );
-                                  } else {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('Esta acción solo está disponible desde la pantalla de Datos.')),
-                                    );
-                                  }
-                                },
-                                child: const Text('Añadir Monstruo'),
+                                ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.red,
+                                    foregroundColor: Colors.white,
+                                  ),
+                                  onPressed: () {
+                                    final playerData = <String, dynamic>{
+                                      'nombre': monster.name,
+                                      'nivelClase1': monster.nivel,
+                                      'hp': monster.hp,
+                                      'maxHp': monster.hp,
+                                      'ac': monster.ac,
+                                      'iniciativa': monster.initiative,
+                                      'att': monster.att,
+                                      'movs': monster.movs,
+                                    };
+                                    if (widget.onAddMonster != null) {
+                                      widget.onAddMonster!(playerData);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('${monster.name} añadido como jugador.')),
+                                      );
+                                    } else {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Esta acción solo está disponible desde la pantalla de Datos.')),
+                                      );
+                                    }
+                                  },
+                                  child: const Text('Añadir Monstruo'),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 12,
+                              runSpacing: 4,
+                              children: [
+                                Text('Tipo: ${monster.type}'),
+                                Text('Nivel: ${monster.nivel}'),
+                                Text('HP: ${monster.hp}'),
+                                Text('AC: ${monster.ac}'),
+                                Text('Iniciativa: ${monster.initiative}'),
+                                Text('XP: ${monster.xp}'),
+                              ],
+                            ),
+                            if (monster.att != null && monster.att!.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text('Ataque: ${monster.att}'),
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 4,
-                            children: [
-                              Text('Tipo: ${monster.type}'),
-                              Text('Nivel: ${monster.nivel}'),
-                              Text('HP: ${monster.hp}'),
-                              Text('AC: ${monster.ac}'),
-                              Text('Iniciativa: ${monster.initiative}'),
-                              Text('XP: ${monster.xp}'),
-                            ],
-                          ),
-                          if (monster.att != null && monster.att!.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 4),
-                              child: Text('Ataque: ${monster.att}'),
+                            if (monster.movs != null && monster.movs!.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Text('Movs: ${monster.movs}'),
+                              ),
+                            const Padding(
+                              padding: EdgeInsets.only(top: 4),
+                              child: Text('Toca la card para editar/eliminar', style: TextStyle(fontSize: 11, color: Colors.grey)),
                             ),
-                          if (monster.movs != null && monster.movs!.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 2),
-                              child: Text('Movs: ${monster.movs}'),
-                            ),
-                          const Padding(
-                            padding: EdgeInsets.only(top: 4),
-                            child: Text('Toca la card para editar/eliminar', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                )),
+                  );
+                }),
                 // Monstruos base
                 ...filteredMonsters.map((monster) => Card(
                   margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -613,7 +588,6 @@ class _MonsterDbScreenState extends State<MonsterDbScreen> {
                             padding: const EdgeInsets.only(top: 2),
                             child: Text('Movs: ${monster['movs']}'),
                           ),
-                        // Mostrar cualquier otro campo adicional
                         ...monster.entries.where((e) => !['name','type','nivel','level','hp','ac','initiative','xp','att','movs'].contains(e.key)).map((e) =>
                           Padding(
                             padding: const EdgeInsets.only(top: 2),
