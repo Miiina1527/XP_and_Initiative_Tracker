@@ -8,7 +8,7 @@ part of 'monster.dart';
 
 class MonsterAdapter extends TypeAdapter<Monster> {
   @override
-  final int typeId = 2;
+  final int typeId = 1;
 
   @override
   Monster read(BinaryReader reader) {
