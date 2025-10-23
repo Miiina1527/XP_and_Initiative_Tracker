@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive/hive.dart';
 import '../providers/jugadores_provider.dart';
 
 class CombateScreen extends ConsumerWidget {
-  const CombateScreen({super.key});
+  final int? campaignSlot;
+  const CombateScreen({super.key, this.campaignSlot});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final jugadores = ref.watch(jugadoresProvider);
+    // If a campaignSlot is provided and the per-slot jugadores box is open, read from provider family
+    final jugadores = (campaignSlot != null && Hive.isBoxOpen('jugadores_slot_$campaignSlot'))
+        ? ref.watch(jugadoresProviderForSlot(campaignSlot!))
+        : ref.watch(jugadoresProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Iniciativa y Combate')),

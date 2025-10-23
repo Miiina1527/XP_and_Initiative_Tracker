@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:hive_flutter/adapters.dart';
 import '../providers/jugadores_provider.dart';
+import '../providers/campaigns_provider.dart';
 import '../models/jugador.dart';
 import 'monsterdb_screen.dart';
 
 class DatosScreen extends ConsumerStatefulWidget {
-  const DatosScreen({super.key});
+  final int? campaignSlot;
+  const DatosScreen({super.key, this.campaignSlot});
 
   @override
   ConsumerState<DatosScreen> createState() => _DatosScreenState();
@@ -18,9 +22,7 @@ class _DatosScreenState extends ConsumerState<DatosScreen> {
   final _maxHpCtrl = TextEditingController(text: '10'); // Nuevo controlador para maxHp
   final _acCtrl = TextEditingController(text: '10');
   final _xpCtrl = TextEditingController(text: '0');
-  final _nivelClase1Ctrl = TextEditingController(text: '1');
-  final _nivelClase2Ctrl = TextEditingController(text: '0');
-  final _nivelClase3Ctrl = TextEditingController(text: '0');
+  final _nivel = TextEditingController(text: '1');
   bool _esEnemigo = false;
 
   @override
@@ -29,9 +31,7 @@ class _DatosScreenState extends ConsumerState<DatosScreen> {
     _hpCtrl.dispose();
     _acCtrl.dispose();
     _xpCtrl.dispose();
-    _nivelClase1Ctrl.dispose();
-    _nivelClase2Ctrl.dispose();
-    _nivelClase3Ctrl.dispose();
+    _nivel.dispose();
     _maxHpCtrl.dispose(); // Liberar el controlador
     super.dispose();
   }
@@ -44,9 +44,7 @@ class _DatosScreenState extends ConsumerState<DatosScreen> {
     _maxHpCtrl.text = '10';
     _acCtrl.text = '10';
     _xpCtrl.text = '0';
-    _nivelClase1Ctrl.text = '1';
-    _nivelClase2Ctrl.text = '0';
-    _nivelClase3Ctrl.text = '0';
+    _nivel.text = '1';
     setState(() => _esEnemigo = false);
   }
 
@@ -57,19 +55,22 @@ class _DatosScreenState extends ConsumerState<DatosScreen> {
         hp: _toInt(_hpCtrl.text, 0),
         maxHp: _toInt(_maxHpCtrl.text, 10), // Asignar maxHp
         ac: _toInt(_acCtrl.text, 10),
-        nivelClase1: _toInt(_nivelClase1Ctrl.text, 1),
-        nivelClase2: _toInt(_nivelClase2Ctrl.text, 0),
-        nivelClase3: _toInt(_nivelClase3Ctrl.text, 0),
+        nivel: _toInt(_nivel.text, 1), // Usar el campo nivel simplificado
         xp: _toInt(_xpCtrl.text, 0),
         esEnemigo: _esEnemigo,
         accionesClase: 0,
         accionesHeroicas: 0,
         danoHecho: 0,
       );
-      ref.read(jugadoresProvider.notifier).agregarJugador(nuevo);
+      // If a campaignSlot is provided and the per-slot jugadores box is open, save there.
+      final hasSlotBox = widget.campaignSlot != null && Hive.isBoxOpen('jugadores_slot_${widget.campaignSlot}');
+      final jugadoresNotifier = hasSlotBox
+        ? ref.read(jugadoresProviderForSlot(widget.campaignSlot!).notifier)
+        : ref.read(jugadoresProvider.notifier);
+      jugadoresNotifier.agregarJugador(nuevo);
       _limpiarFormulario();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Jugador añadido')),
+        SnackBar(content: Text("player_added".tr())),
       );
     }
   }
@@ -79,9 +80,7 @@ class _DatosScreenState extends ConsumerState<DatosScreen> {
     final hp = TextEditingController(text: j.hp.toString());
     final maxHp = TextEditingController(text: j.maxHp.toString()); // Nuevo campo
     final ac = TextEditingController(text: j.ac.toString());
-    final nivelClase1 = TextEditingController(text: j.nivelClase1.toString());
-    final nivelClase2 = TextEditingController(text: j.nivelClase2.toString());
-    final nivelClase3 = TextEditingController(text: j.nivelClase3.toString());
+    final nivel = TextEditingController(text: j.nivel.toString()); // Usar el campo nivel
     final xp = TextEditingController(text: j.xp.toString());
     bool esEnemigo = j.esEnemigo;
 
@@ -90,95 +89,91 @@ class _DatosScreenState extends ConsumerState<DatosScreen> {
       builder: (_) {
         return StatefulBuilder(
           builder: (context, setState) => AlertDialog(
-            title: Text('Editar ${j.nombre}'),
+            title: Text('${"edit_player".tr()} ${j.nombre}'),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   TextField(
                     controller: nombre,
-                    decoration: const InputDecoration(labelText: 'Nombre'),
+                    decoration: InputDecoration(labelText: "name".tr()),
                   ),
                   const SizedBox(height: 8),
                   TextField(
                     controller: hp,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'HP'),
+                    decoration: InputDecoration(labelText: "hp".tr()),
                   ),
                   const SizedBox(height: 8),
                   TextField(
                     controller: maxHp,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'HP Máximo'),
+                    decoration: InputDecoration(labelText: "max_hp".tr()),
                   ),
                   const SizedBox(height: 8),
                   TextField(
                     controller: ac,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'AC'),
+                    decoration: InputDecoration(labelText: "ac".tr()),
                   ),
                   const SizedBox(height: 8),
                   TextField(
-                    controller: nivelClase1,
+                    controller: nivel,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Nivel'),
-                  ),
-                  TextField(
-                    controller: nivelClase2,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Nivel'),
-                  ),
-                  TextField(
-                    controller: nivelClase3,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Nivel'),
+                    decoration: InputDecoration(labelText: "level".tr()),
                   ),
                   const SizedBox(height: 8),
                   TextField(
                     controller: xp,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'XP total'),
+                    decoration: InputDecoration(labelText: "total_xp".tr()),
                   ),
                   const SizedBox(height: 8),
                   SwitchListTile(
                     value: esEnemigo,
                     onChanged: (v) => setState(() => esEnemigo = v),
-                    title: const Text('¿Es enemigo?'),
+                    title: Text("is_enemy".tr()),
                     contentPadding: EdgeInsets.zero,
                   ),
                 ],
               ),
             ),
             actions: [
-              TextButton(
+                  TextButton(
                 onPressed: () {
-                  ref.read(jugadoresProvider.notifier).eliminarJugador(index);
+                  final hasSlotBox = widget.campaignSlot != null && Hive.isBoxOpen('jugadores_slot_${widget.campaignSlot}');
+                  final jugadoresNotifier = hasSlotBox
+                    ? ref.read(jugadoresProviderForSlot(widget.campaignSlot!).notifier)
+                    : ref.read(jugadoresProvider.notifier);
+                  jugadoresNotifier.eliminarJugador(index);
                   Navigator.pop(context);
                 },
                 style: TextButton.styleFrom(foregroundColor: Colors.red),
-                child: const Text('Eliminar'),
+                child: Text("delete".tr()),
               ),
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Cancelar'),
+                child: Text("cancel".tr()),
               ),
               ElevatedButton(
-                onPressed: () {
+                  onPressed: () {
                   final actualizado = j.copyWith(
                     nombre: nombre.text.trim().isEmpty ? j.nombre : nombre.text.trim(),
                     hp: _toInt(hp.text, j.hp),
                     maxHp: _toInt(maxHp.text, j.maxHp), // Actualizar maxHp
                     ac: _toInt(ac.text, j.ac),
-                    nivelClase1: _toInt(nivelClase1.text, j.nivelClase1),
-                    nivelClase2: _toInt(nivelClase2.text, j.nivelClase2),
-                    nivelClase3: _toInt(nivelClase3.text, j.nivelClase3),
+                    nivel: _toInt(nivel.text, j.nivel), // Usar el campo nivel
                     xp: _toInt(xp.text, j.xp),
                     esEnemigo: esEnemigo,
                   );
-                  ref.read(jugadoresProvider.notifier).actualizarJugador(index, actualizado);
+                  final hasSlotBox = widget.campaignSlot != null && Hive.isBoxOpen('jugadores_slot_${widget.campaignSlot}');
+                  final jugadoresNotifier = hasSlotBox
+                    ? ref.read(jugadoresProviderForSlot(widget.campaignSlot!).notifier)
+                    : ref.read(jugadoresProvider.notifier);
+                  jugadoresNotifier.actualizarJugador(index, actualizado);
                   Navigator.pop(context);
                 },
-                child: const Text('Guardar'),
+                child: Text("save".tr()),
               ),
             ],
           ),
@@ -189,12 +184,14 @@ class _DatosScreenState extends ConsumerState<DatosScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final jugadores = ref.watch(jugadoresProvider);
+  final jugadores = widget.campaignSlot != null && Hive.isBoxOpen('jugadores_slot_${widget.campaignSlot}')
+    ? ref.watch(jugadoresProviderForSlot(widget.campaignSlot!))
+    : ref.watch(jugadoresProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFFFAF3E0), // Fondo pergamino claro
       appBar: AppBar(
-        title: const Text('Datos de Jugadores'),
+        title: Text("player_data".tr()),
         backgroundColor: const Color(0xFFB68D40), // Marrón dorado
         foregroundColor: Colors.white,
       ),
@@ -212,9 +209,9 @@ class _DatosScreenState extends ConsumerState<DatosScreen> {
                 key: _formKey,
                 child: Column(
                   children: [
-                    const Text(
-                      'Añadir jugador / enemigo',
-                      style: TextStyle(
+                    Text(
+                      "add_player_enemy".tr(),
+                      style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                         fontFamily: 'NotoSerifJP',
@@ -225,11 +222,11 @@ class _DatosScreenState extends ConsumerState<DatosScreen> {
                     // Campo Nombre
                     TextFormField(
                       controller: _nombreCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Nombre',
-                        prefixIcon: Icon(Icons.person, color: Colors.brown),
+                      decoration: InputDecoration(
+                        labelText: "name".tr(),
+                        prefixIcon: const Icon(Icons.person, color: Colors.brown),
                       ),
-                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Pon un nombre' : null,
+                      validator: (v) => (v == null || v.trim().isEmpty) ? "put_a_name".tr() : null,
                     ),
                     const SizedBox(height: 8),
 
@@ -240,9 +237,9 @@ class _DatosScreenState extends ConsumerState<DatosScreen> {
                         child: TextFormField(
                         controller: _hpCtrl,
                         keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'HP',
-                          prefixIcon: Icon(Icons.favorite, color: Colors.red),
+                        decoration: InputDecoration(
+                          labelText: "hp".tr(),
+                          prefixIcon: const Icon(Icons.favorite, color: Colors.red),
                         ),
                         ),
                       ),
@@ -251,9 +248,9 @@ class _DatosScreenState extends ConsumerState<DatosScreen> {
                         child: TextFormField(
                         controller: _maxHpCtrl,
                         keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'HP Máximo',
-                          prefixIcon: Icon(Icons.favorite_border, color: Colors.redAccent),
+                        decoration: InputDecoration(
+                          labelText: "max_hp".tr(),
+                          prefixIcon: const Icon(Icons.favorite_border, color: Colors.redAccent),
                         ),
                         ),
                       ),
@@ -262,9 +259,9 @@ class _DatosScreenState extends ConsumerState<DatosScreen> {
                         child: TextFormField(
                         controller: _acCtrl,
                         keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'AC',
-                          prefixIcon: Icon(Icons.shield, color: Colors.blue),
+                        decoration: InputDecoration(
+                          labelText: "ac".tr(),
+                          prefixIcon: const Icon(Icons.shield, color: Colors.blue),
                         ),
                         ),
                       ),
@@ -272,41 +269,20 @@ class _DatosScreenState extends ConsumerState<DatosScreen> {
                     ),
                     const SizedBox(height: 8),
 
-                    // Nivel por clase (en una sola fila)
+                    // Nivel (en una sola fila)
                     Row(
                       children: [
                         Expanded(
                           child: TextFormField(
-                            controller: _nivelClase1Ctrl,
+                            controller: _nivel,
                             keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
-                              labelText: 'Nivel Clase 1',
-                              prefixIcon: Icon(Icons.star, color: Colors.amber),
+                            decoration: InputDecoration(
+                              labelText: "level".tr(),
+                              prefixIcon: const Icon(Icons.star, color: Colors.amber),
                             ),
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Expanded(
-                          child: TextFormField(
-                            controller: _nivelClase2Ctrl,
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
-                              labelText: 'Nivel Clase 2',
-                              prefixIcon: Icon(Icons.star, color: Colors.pink),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: TextFormField(
-                            controller: _nivelClase3Ctrl,
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
-                              labelText: 'Nivel Clase 3',
-                              prefixIcon: Icon(Icons.star, color: Colors.cyan),
-                            ),
-                          ),
-                        ),
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -318,9 +294,9 @@ class _DatosScreenState extends ConsumerState<DatosScreen> {
                           child: TextFormField(
                             controller: _xpCtrl,
                             keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
-                              labelText: 'XP total',
-                              prefixIcon: Icon(Icons.flash_on, color: Colors.orange),
+                            decoration: InputDecoration(
+                              labelText: "total_xp".tr(),
+                              prefixIcon: const Icon(Icons.flash_on, color: Colors.orange),
                             ),
                           ),
                         ),
@@ -329,7 +305,7 @@ class _DatosScreenState extends ConsumerState<DatosScreen> {
                           child: SwitchListTile(
                             value: _esEnemigo,
                             onChanged: (v) => setState(() => _esEnemigo = v),
-                            title: const Text('¿Es enemigo?'),
+                            title: Text("is_enemy".tr()),
                             contentPadding: EdgeInsets.zero,
                           ),
                         ),
@@ -349,13 +325,13 @@ class _DatosScreenState extends ConsumerState<DatosScreen> {
                             ),
                             icon: const Icon(Icons.person_add),
                             onPressed: _agregarJugador,
-                            label: const Text('Añadir'),
+                            label: Text("add".tr()),
                           ),
                         ),
                         const SizedBox(width: 8),
                         OutlinedButton(
                           onPressed: _limpiarFormulario,
-                          child: const Text('Limpiar'),
+                          child: Text("clear".tr()),
                         )
                       ],
                     ),
@@ -368,12 +344,12 @@ class _DatosScreenState extends ConsumerState<DatosScreen> {
 
           // --- Lista de jugadores ---
           if (jugadores.isEmpty)
-            const Center(
+            Center(
               child: Padding(
-                padding: EdgeInsets.all(24.0),
+                padding: const EdgeInsets.all(24.0),
                 child: Text(
-                  'Aún no hay personajes. Agrega el primero arriba.',
-                  style: TextStyle(fontFamily: 'NotoSerifJP'),
+                  "no_characters_yet".tr(),
+                  style: const TextStyle(fontFamily: 'NotoSerifJP'),
                 ),
               ),
             )
@@ -410,28 +386,35 @@ class _DatosScreenState extends ConsumerState<DatosScreen> {
             child: Padding(
               padding: const EdgeInsets.only(bottom: 24, right: 24),
               child: FloatingActionButton(
+                // ignore: deprecated_member_use
                 backgroundColor: Colors.red.shade700.withOpacity(0.85),
-                child: const Icon(Icons.auto_awesome, color: Colors.white),
                 onPressed: () async {
                   await showDialog(
                     context: context,
+                    // ignore: deprecated_member_use
                     barrierColor: Colors.black.withOpacity(0.3),
                     builder: (context) => Dialog(
+                      // ignore: deprecated_member_use
                       backgroundColor: Colors.white.withOpacity(0.95),
                       insetPadding: const EdgeInsets.all(16),
                       child: SizedBox(
                         width: 400,
                         height: 600,
                         child: MonsterDbScreen(
+                          initialSistema: () {
+                            if (widget.campaignSlot == null) return null;
+                            final camp = ref.read(campaignsProvider)[widget.campaignSlot!];
+                            if (camp == null) return null;
+                            return camp.system == 'dnd5' ? SistemaJuego.dnd5e : SistemaJuego.pathfinder;
+                          }(),
+                          hideSistemaSelector: widget.campaignSlot != null,
                           onAddMonster: (monsterData) {
                             final nuevo = Jugador(
                               nombre: monsterData['nombre'],
                               hp: monsterData['hp'] ?? 0,
                               maxHp: monsterData['hp'] ?? 0,
                               ac: monsterData['ac'] ?? 10,
-                              nivelClase1: monsterData['nivelClase1'] ?? 1,
-                              nivelClase2: monsterData['nivelClase2'] ?? 0,
-                              nivelClase3: monsterData['nivelClase3'] ?? 0,
+                              nivel: monsterData['nivelClase1'] ?? 1, // Usar nivel desde el dato del monstruo
                               xp: 0,
                               esEnemigo: true,
                               accionesClase: 0,
@@ -441,18 +424,24 @@ class _DatosScreenState extends ConsumerState<DatosScreen> {
                               att: monsterData['att'],
                               movs: monsterData['movs'],
                             );
-                            ref.read(jugadoresProvider.notifier).agregarJugador(nuevo);
+                            final hasSlotBox2 = widget.campaignSlot != null && Hive.isBoxOpen('jugadores_slot_${widget.campaignSlot}');
+                            final jugadoresNotifier = hasSlotBox2
+                              ? ref.read(jugadoresProviderForSlot(widget.campaignSlot!).notifier)
+                              : ref.read(jugadoresProvider.notifier);
+                            jugadoresNotifier.agregarJugador(nuevo);
                             Navigator.of(context).pop();
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('${monsterData['nombre']} añadido como enemigo.')),
+                              SnackBar(content: Text('${monsterData['nombre']} ${hasSlotBox2 ? "monster_added_to_slot".tr() : "monster_added_as_enemy".tr()}')),
                             );
                           },
+                            campaignSlot: widget.campaignSlot,
                         ),
                       ),
                     ),
                   );
                 },
-                tooltip: 'Añadir enemigo desde base de monstruos',
+                tooltip: "add_enemy_from_monster_db".tr(),
+                child: const Icon(Icons.auto_awesome, color: Colors.white),
               ),
             ),
           ),

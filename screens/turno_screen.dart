@@ -1,23 +1,81 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive/hive.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 import '../models/jugador.dart';
 import '../providers/jugadores_provider.dart';
 import '../providers/combate_provider.dart';
 import '../utils/calculoxp.dart';
 
+// Provider persistente para manejar el sistema de XP seleccionado (duplicado temporalmente)
+class SistemaXPNotifier extends StateNotifier<SistemaXP> {
+  static const String _boxName = 'configuracion';
+  static const String _sistemaXPKey = 'sistemaXP';
+  
+  SistemaXPNotifier() : super(SistemaXP.pathfinder1e) {
+    _cargarSistema();
+  }
+  
+  Future<void> _cargarSistema() async {
+    try {
+      final box = await Hive.openBox(_boxName);
+      final sistemaGuardado = box.get(_sistemaXPKey);
+      if (sistemaGuardado != null) {
+        // Convertir string guardado a enum
+        if (sistemaGuardado == 'pathfinder2e') {
+          state = SistemaXP.pathfinder2e;
+        } else {
+          state = SistemaXP.pathfinder1e;
+        }
+      }
+    } catch (e) {
+      // Si hay error, mantener valor por defecto
+      state = SistemaXP.pathfinder1e;
+    }
+  }
+  
+  Future<void> cambiarSistema(SistemaXP nuevoSistema) async {
+    state = nuevoSistema;
+    try {
+      final box = await Hive.openBox(_boxName);
+      // Guardar como string para simplicidad
+      final sistemaString = nuevoSistema == SistemaXP.pathfinder1e 
+          ? 'pathfinder1e' 
+          : 'pathfinder2e';
+      await box.put(_sistemaXPKey, sistemaString);
+    } catch (e) {
+      // Si hay error al guardar, no afecta la funcionalidad
+  debugPrint('Error al guardar sistema XP: $e');
+    }
+  }
+}
+
+final sistemaXPProvider = StateNotifierProvider<SistemaXPNotifier, SistemaXP>(
+  (ref) => SistemaXPNotifier(),
+);
+
 class TurnoScreen extends ConsumerWidget {
-  const TurnoScreen({super.key});
+  final int? campaignSlot;
+
+  const TurnoScreen({super.key, this.campaignSlot});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final combate = ref.watch(combateProvider);
-    final jugadoresGlobal = ref.watch(jugadoresProvider);
+  final combate = ref.watch(combateProvider);
+
+    final bool hasSlotBox = campaignSlot != null && Hive.isBoxOpen('jugadores_slot_$campaignSlot');
+  final jugadoresGlobal = hasSlotBox
+    ? ref.watch(jugadoresProviderForSlot(campaignSlot!))
+    : ref.watch(jugadoresProvider);
+  final jugadoresNotifier = hasSlotBox
+    ? ref.read(jugadoresProviderForSlot(campaignSlot!).notifier)
+    : ref.read(jugadoresProvider.notifier);
 
     if (!combate.combateActivo || combate.ordenIniciativa.isEmpty) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Turno')),
-        body: const Center(child: Text('No hay combate activo')),
+        appBar: AppBar(title: Text("turn_title".tr())),
+        body: Center(child: Text("no_active_combat".tr())),
       );
     }
 
@@ -42,11 +100,11 @@ class TurnoScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Turno de ${pjActual.nombre}'),
+        title: Text('${"turn_of".tr()} ${pjActual.nombre}'),
         actions: [
           IconButton(
             icon: const Icon(Icons.flag),
-            tooltip: 'Terminar combate',
+            tooltip: "end_combat_tooltip".tr(),
             onPressed: () {
               _terminarCombate(context, ref);
               for (var jugador in jugadoresGlobal) {
@@ -100,12 +158,12 @@ class TurnoScreen extends ConsumerWidget {
                               ),
                               const SizedBox(height: 6),
                               Text("🛡️ AC: ${pjActual.ac}   ⭐ Nivel: ${pjActual.nivel}"),
-                              Text("⚡ Clase: ${pjActual.accionesClase}   🔥 Heroicas: ${pjActual.accionesHeroicas}"),
-                              Text("⚔️ Daño Hecho: ${pjActual.danoHecho}"),
+                              Text("⚡ ${"class_button".tr()}: ${pjActual.accionesClase}   🔥 ${"heroic_button".tr()}: ${pjActual.accionesHeroicas}"),
+                              Text("⚔️ ${"damage_dealt".tr()}: ${pjActual.danoHecho}"),
                               if (pjActual.att != null && pjActual.att!.isNotEmpty)
-                                Text('Ataque: ${pjActual.att}'),
+                                Text('${"attack".tr()}: ${pjActual.att}'),
                               if (pjActual.movs != null && pjActual.movs!.isNotEmpty)
-                                Text('Movs: ${pjActual.movs}'),
+                                Text('${"moves".tr()}: ${pjActual.movs}'),
                             ],
                           ),
                         ),
@@ -140,32 +198,30 @@ class TurnoScreen extends ConsumerWidget {
               children: [
                 if (!pjActual.esEnemigo) ...[
                   ElevatedButton.icon(
-                    onPressed: () {
-                      ref.read(jugadoresProvider.notifier).actualizarJugador(
-                            idxActual,
-                            pjActual.copyWith(
-                                accionesClase: pjActual.accionesClase + 1),
-                          );
-                    },
+                      onPressed: () {
+                        jugadoresNotifier.actualizarJugador(
+                          idxActual,
+                          pjActual.copyWith(accionesClase: pjActual.accionesClase + 1),
+                        );
+                      },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.blueAccent,
                     ),
                     icon: const Icon(Icons.bolt),
-                    label: const Text('Acción de Clase'),
+                    label: Text("class_action".tr()),
                   ),
                   ElevatedButton.icon(
                     onPressed: () {
-                      ref.read(jugadoresProvider.notifier).actualizarJugador(
-                            idxActual,
-                            pjActual.copyWith(
-                                accionesHeroicas: pjActual.accionesHeroicas + 1),
-                          );
+                      jugadoresNotifier.actualizarJugador(
+                        idxActual,
+                        pjActual.copyWith(accionesHeroicas: pjActual.accionesHeroicas + 1),
+                      );
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.amber,
                     ),
                     icon: const Icon(Icons.star),
-                    label: const Text('Acción Heroica'),
+                    label: Text("heroic_action".tr()),
                   ),
                 ],
                 ElevatedButton.icon(
@@ -175,7 +231,7 @@ class TurnoScreen extends ConsumerWidget {
                     backgroundColor: Colors.redAccent,
                   ),
                   icon: const Icon(Icons.local_fire_department),
-                  label: const Text('Hacer Daño'),
+                  label: Text("deal_damage".tr()),
                 ),
                 ElevatedButton.icon(
                   onPressed: () =>
@@ -184,7 +240,7 @@ class TurnoScreen extends ConsumerWidget {
                     backgroundColor: Colors.green[700],
                   ),
                   icon: const Icon(Icons.healing),
-                  label: const Text('Curar'),
+                  label: Text("heal".tr()),
                 ),
                 ElevatedButton.icon(
                   onPressed: () => _dialogoAtaqueOportunidad(
@@ -193,22 +249,21 @@ class TurnoScreen extends ConsumerWidget {
                     backgroundColor: Colors.purple,
                   ),
                   icon: const Icon(Icons.flash_on),
-                  label: const Text('Ataque Oportunidad'),
+                  label: Text("opportunity_attack".tr()),
                 ),
               ],
             ),
             const Spacer(),
             ElevatedButton.icon(
-              onPressed: () {
-                final quedanEnemigos = ref.read(jugadoresProvider).any(
-                    (j) => j.esEnemigo && j.hp > 0);
+                onPressed: () {
+                  final quedanEnemigos = jugadoresGlobal.any((j) => j.esEnemigo && j.hp > 0);
 
-                if (!quedanEnemigos) {
-                  _terminarCombate(context, ref);
-                  return;
-                }
-                ref.read(combateProvider.notifier).siguienteTurno();
-              },
+                  if (!quedanEnemigos) {
+                    _terminarCombate(context, ref);
+                    return;
+                  }
+                  ref.read(combateProvider.notifier).siguienteTurno();
+                },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green,
                 padding: const EdgeInsets.symmetric(vertical: 16),
@@ -217,9 +272,9 @@ class TurnoScreen extends ConsumerWidget {
                 ),
               ),
               icon: const Icon(Icons.navigate_next),
-              label: const Text(
-                "Siguiente Turno",
-                style: TextStyle(fontSize: 18),
+              label: Text(
+                "next_turn_button".tr(),
+                style: const TextStyle(fontSize: 18),
               ),
             ),
           ],
@@ -229,16 +284,46 @@ class TurnoScreen extends ConsumerWidget {
   }
 
   void _terminarCombate(BuildContext context, WidgetRef ref) {
-    final jugadoresNotifier = ref.read(jugadoresProvider.notifier);
-    final jugadores = ref.read(jugadoresProvider);
+    final bool hasSlotBox = campaignSlot != null && Hive.isBoxOpen('jugadores_slot_$campaignSlot');
+    final jugadoresNotifier = hasSlotBox
+        ? ref.read(jugadoresProviderForSlot(campaignSlot!).notifier)
+        : ref.read(jugadoresProvider.notifier);
+    final sistemaXP = ref.read(sistemaXPProvider);
 
-    final int crEnemigo = calcularCREnemigos(jugadores);
-    final int crParty = calcularCRParty(jugadores);
+    // Detectar automáticamente el sistema basado en enemigos presentes
+    final jugadores = hasSlotBox
+        ? ref.read(jugadoresProviderForSlot(campaignSlot!))
+        : ref.read(jugadoresProvider);
+    final enemigos = jugadores.where((j) => j.esEnemigo).toList();
+    
+    SistemaJuego sistemaJuego;
+    
+    if (enemigos.isNotEmpty) {
+      // Detectar sistema basado en niveles de enemigos (heurística simple)
+      final nivelesEnemigos = enemigos.map((e) => e.nivel).toList();
+      final tieneNivelesFraccionarios = nivelesEnemigos.any((nivel) => nivel < 1);
+      
+      if (tieneNivelesFraccionarios) {
+        // Probablemente D&D (CR 0.25, 0.5, etc. se almacenan como 0)
+        sistemaJuego = SistemaJuego.dnd5e;
+      } else {
+        // Convertir SistemaXP a SistemaJuego para sistemas de Pathfinder
+        sistemaJuego = sistemaXP == SistemaXP.pathfinder1e 
+            ? SistemaJuego.pathfinder1e 
+            : SistemaJuego.pathfinder2e;
+      }
+    } else {
+      // Sin enemigos, usar sistema por defecto
+      sistemaJuego = sistemaXP == SistemaXP.pathfinder1e 
+          ? SistemaJuego.pathfinder1e 
+          : SistemaJuego.pathfinder2e;
+    }
 
-    jugadoresNotifier.calcularYAcumularXpCombate(
-      crEnemigos: crEnemigo,
-      crParty: crParty,
+    // Usar el método oficial con el sistema detectado
+    jugadoresNotifier.calcularYAcumularXpOficial(
+      sistema: sistemaJuego,
     );
+
     jugadoresNotifier.guardarYReiniciarAcciones();
     jugadoresNotifier.eliminarEnemigos();
     ref.read(combateProvider.notifier).terminarCombate();
@@ -247,23 +332,31 @@ class TurnoScreen extends ConsumerWidget {
 
   void _dialogoDanioEnemigo(
       BuildContext context, WidgetRef ref, Jugador atacante, int idxAtacante) {
-    final jugadores = ref.read(jugadoresProvider);
+    final bool hasSlotBox = campaignSlot != null && Hive.isBoxOpen('jugadores_slot_$campaignSlot');
+    final jugadores = hasSlotBox
+        ? ref.read(jugadoresProviderForSlot(campaignSlot!))
+        : ref.read(jugadoresProvider);
     _abrirDialogoHP(context, ref, jugadores, atacante, idxAtacante,
         esCuracion: false);
   }
 
   void _dialogoCurar(
       BuildContext context, WidgetRef ref, Jugador curador, int idxCurador) {
-    final jugadores = ref.read(jugadoresProvider);
+    final bool hasSlotBox = campaignSlot != null && Hive.isBoxOpen('jugadores_slot_$campaignSlot');
+    final jugadores = hasSlotBox
+        ? ref.read(jugadoresProviderForSlot(campaignSlot!))
+        : ref.read(jugadoresProvider);
     _abrirDialogoHP(context, ref, jugadores, curador, idxCurador,
         esCuracion: true);
   }
 
   void _dialogoAtaqueOportunidad(
       BuildContext context, WidgetRef ref, Jugador objetivo, int idxObjetivo) {
-    final jugadores = ref.read(jugadoresProvider);
-    final posiblesAtacantes =
-        jugadores.where((j) => j.nombre != objetivo.nombre).toList();
+    final bool hasSlotBox = campaignSlot != null && Hive.isBoxOpen('jugadores_slot_$campaignSlot');
+    final jugadores = hasSlotBox
+        ? ref.read(jugadoresProviderForSlot(campaignSlot!))
+        : ref.read(jugadoresProvider);
+    final posiblesAtacantes = jugadores.where((j) => j.nombre != objetivo.nombre).toList();
 
     int? idxAtacante =
         posiblesAtacantes.isNotEmpty ? jugadores.indexOf(posiblesAtacantes[0]) : null;
@@ -278,10 +371,10 @@ class TurnoScreen extends ConsumerWidget {
               borderRadius: BorderRadius.circular(16),
             ),
             title: Row(
-              children: const [
-                Icon(Icons.flash_on, color: Colors.purple),
-                SizedBox(width: 8),
-                Text('Ataque de Oportunidad'),
+              children: [
+                const Icon(Icons.flash_on, color: Colors.purple),
+                const SizedBox(width: 8),
+                Text("opportunity_attack".tr()),
               ],
             ),
             content: Column(
@@ -305,9 +398,9 @@ class TurnoScreen extends ConsumerWidget {
                 TextField(
                   controller: cantidadCtrl,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Daño del ataque',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: "attack_damage".tr(),
+                    border: const OutlineInputBorder(),
                   ),
                 ),
               ],
@@ -315,7 +408,7 @@ class TurnoScreen extends ConsumerWidget {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Cancelar'),
+                child: Text("cancel".tr()),
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
@@ -327,27 +420,28 @@ class TurnoScreen extends ConsumerWidget {
 
                   final atacante = jugadores[idxAtacante!];
 
-                  ref.read(jugadoresProvider.notifier).actualizarJugador(
-                        idxAtacante!,
-                        atacante.copyWith(
-                          danoHecho: atacante.danoHecho + cantidad,
-                        ),
-                      );
+                  final bool hasSlotBoxLocal = campaignSlot != null && Hive.isBoxOpen('jugadores_slot_$campaignSlot');
+                  final jugadoresNotifier = hasSlotBoxLocal
+                      ? ref.read(jugadoresProviderForSlot(campaignSlot!).notifier)
+                      : ref.read(jugadoresProvider.notifier);
 
-                  int nuevoHP =
-                      (objetivo.hp - cantidad).clamp(0, objetivo.maxHp);
+                  jugadoresNotifier.actualizarJugador(
+                    idxAtacante!,
+                    atacante.copyWith(
+                      danoHecho: atacante.danoHecho + cantidad,
+                    ),
+                  );
 
-                  ref.read(jugadoresProvider.notifier).actualizarJugador(
-                        idxObjetivo,
-                        objetivo.copyWith(
-                          hp: nuevoHP,
-                          died: nuevoHP == 0,
-                        ),
-                      );
+                  int nuevoHP = (objetivo.hp - cantidad).clamp(0, objetivo.maxHp);
+
+                  jugadoresNotifier.actualizarJugador(
+                    idxObjetivo,
+                    objetivo.copyWith(hp: nuevoHP, died: nuevoHP == 0),
+                  );
 
                   Navigator.pop(context);
                 },
-                child: const Text('Aplicar'),
+                child: Text("apply".tr()),
               ),
             ],
           ),
@@ -364,7 +458,7 @@ class TurnoScreen extends ConsumerWidget {
 
     if (party.isEmpty && enemigos.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No hay jugadores en la lista')),
+        SnackBar(content: Text("no_players_in_list".tr())),
       );
       return;
     }
@@ -387,7 +481,7 @@ class TurnoScreen extends ConsumerWidget {
                   color: esCuracion ? Colors.green : Colors.red,
                 ),
                 const SizedBox(width: 8),
-                Text(esCuracion ? 'Curar' : 'Hacer Daño'),
+                Text(esCuracion ? "heal".tr() : "deal_damage".tr()),
               ],
             ),
             content: Column(
@@ -397,10 +491,10 @@ class TurnoScreen extends ConsumerWidget {
                   value: idxObjetivo,
                   isExpanded: true,
                   items: [
-                    const DropdownMenuItem<int>(
+                    DropdownMenuItem<int>(
                       enabled: false,
                       child: Text(
-                        'Miembros de la Party',
+                        "party_members".tr(),
                         style: TextStyle(
                             fontWeight: FontWeight.bold, color: Colors.grey),
                       ),
@@ -448,7 +542,7 @@ class TurnoScreen extends ConsumerWidget {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Cancelar'),
+                child: Text('cancel'.tr()),
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
@@ -458,29 +552,30 @@ class TurnoScreen extends ConsumerWidget {
                   final cantidad = int.tryParse(cantidadCtrl.text) ?? 0;
                   final objetivo = jugadores[idxObjetivo];
 
+                  final bool hasSlotBoxLocal = campaignSlot != null && Hive.isBoxOpen('jugadores_slot_$campaignSlot');
+                  final jugadoresNotifier = hasSlotBoxLocal
+                      ? ref.read(jugadoresProviderForSlot(campaignSlot!).notifier)
+                      : ref.read(jugadoresProvider.notifier);
+
                   if (!esCuracion) {
-                    ref.read(jugadoresProvider.notifier).actualizarJugador(
-                          idxActor,
-                          actor.copyWith(
-                              danoHecho: actor.danoHecho + cantidad),
-                        );
+                    jugadoresNotifier.actualizarJugador(
+                      idxActor,
+                      actor.copyWith(danoHecho: actor.danoHecho + cantidad),
+                    );
                   }
 
                   int nuevoHP = esCuracion
                       ? (objetivo.hp + cantidad).clamp(0, objetivo.maxHp)
                       : (objetivo.hp - cantidad).clamp(0, objetivo.maxHp);
 
-                  ref.read(jugadoresProvider.notifier).actualizarJugador(
-                        idxObjetivo,
-                        objetivo.copyWith(
-                          hp: nuevoHP,
-                          died: nuevoHP == 0,
-                        ),
-                      );
+                  jugadoresNotifier.actualizarJugador(
+                    idxObjetivo,
+                    objetivo.copyWith(hp: nuevoHP, died: nuevoHP == 0),
+                  );
 
                   Navigator.pop(context);
                 },
-                child: const Text('Aplicar'),
+                child: Text('apply'.tr()),
               ),
             ],
           ),

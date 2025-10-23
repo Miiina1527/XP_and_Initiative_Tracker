@@ -1,17 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive/hive.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../providers/jugadores_provider.dart';
 
 class DetallesJugadoresScreen extends ConsumerWidget {
-  const DetallesJugadoresScreen({super.key});
+  final int? campaignSlot;
+  const DetallesJugadoresScreen({super.key, this.campaignSlot});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final jugadores = ref.watch(jugadoresProvider).where((j) => !j.esEnemigo).toList();
+  final jugadoresAll = campaignSlot != null && Hive.isBoxOpen('jugadores_slot_$campaignSlot')
+    ? ref.watch(jugadoresProviderForSlot(campaignSlot!))
+    : ref.watch(jugadoresProvider);
+  final jugadores = jugadoresAll.where((j) => !j.esEnemigo).toList();
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Detalles de los Jugadores'),
+        title: Text("player_details_title".tr()),
       ),
       body: Container(
         decoration: const BoxDecoration(
@@ -73,32 +79,29 @@ class DetallesJugadoresScreen extends ConsumerWidget {
                     const SizedBox(height: 14),
 
                     // Datos con íconos
-                    _buildStatRow(Icons.favorite, "HP",
+                    _buildStatRow(Icons.favorite, "hp".tr(),
                         "${jugador.hp} / $maxHp"),
                     _buildProgressBar(porcentajeHP, Colors.red),
 
                     const SizedBox(height: 8),
 
-                    _buildStatRow(Icons.shield, "AC", jugador.ac.toString()),
-                    _buildStatRow(Icons.star, "Nivel", jugador.nivel.toString()),
-                    _buildStatRow(Icons.star_border, "Nivel Clase 1", jugador.nivelClase1.toString()),
-                    _buildStatRow(Icons.star_border, "Nivel Clase 2", jugador.nivelClase2.toString()),
-                    _buildStatRow(Icons.star_border, "Nivel Clase 3", jugador.nivelClase3.toString()),
+                    _buildStatRow(Icons.shield, "ac".tr(), jugador.ac.toString()),
+                    _buildStatRow(Icons.star, "level".tr(), jugador.nivel.toString()),
                     _buildStatRow(
-                        Icons.flash_on, "Iniciativa", jugador.iniciativa.toString()),
+                        Icons.flash_on, "initiative".tr(), jugador.iniciativa.toString()),
 
                     const SizedBox(height: 8),
 
-                    _buildStatRow(Icons.auto_fix_high, "Acciones Clase",
+                    _buildStatRow(Icons.auto_fix_high, "class_actions".tr(),
                         jugador.accionesClase.toString()),
-                    _buildStatRow(Icons.workspace_premium, "Acciones Heroicas",
+                    _buildStatRow(Icons.workspace_premium, "heroic_actions".tr(),
                         jugador.accionesHeroicas.toString()),
 
                     const Divider(height: 20),
 
                     // Datos acumulados
                     Text(
-                      "📊 Datos Acumulados",
+                      "📊 ${"accumulated_data".tr()}",
                       style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -106,12 +109,12 @@ class DetallesJugadoresScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 6),
                     _buildStatRow(Icons.auto_fix_high_outlined,
-                        "Clase Acumuladas", jugador.accionesClaseAcumuladas.toString()),
+                        "accumulated_class_actions".tr(), jugador.accionesClaseAcumuladas.toString()),
                     _buildStatRow(Icons.workspace_premium_outlined,
-                        "Heroicas Acumuladas", jugador.accionesHeroicasAcumuladas.toString()),
+                        "accumulated_heroic_actions".tr(), jugador.accionesHeroicasAcumuladas.toString()),
 
                     const SizedBox(height: 8),
-                    _buildStatRow(Icons.emoji_events, "XP Ganada",
+                    _buildStatRow(Icons.emoji_events, "xp_gained".tr(),
                         jugador.gainedxp.toString()),
                   ],
                 ),

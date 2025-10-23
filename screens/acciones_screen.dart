@@ -1,16 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:hive/hive.dart';
 import '../providers/jugadores_provider.dart';
 
 class AccionesScreen extends ConsumerWidget {
-  const AccionesScreen({super.key});
+  final int? campaignSlot;
+  const AccionesScreen({super.key, this.campaignSlot});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final jugadores = ref.watch(jugadoresProvider);
+  final jugadores = campaignSlot != null && Hive.isBoxOpen('jugadores_slot_$campaignSlot')
+    ? ref.watch(jugadoresProviderForSlot(campaignSlot!))
+    : ref.watch(jugadoresProvider);
+  final jugadoresNotifier = campaignSlot != null && Hive.isBoxOpen('jugadores_slot_$campaignSlot')
+    ? ref.read(jugadoresProviderForSlot(campaignSlot!).notifier)
+    : ref.read(jugadoresProvider.notifier);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Acciones')),
+      appBar: AppBar(title: Text("actions".tr())),
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -58,7 +66,7 @@ class AccionesScreen extends ConsumerWidget {
                         children: [
                           Text(
                             jugador.nombre +
-                                (jugador.esEnemigo ? " (Enemigo)" : ""),
+                                (jugador.esEnemigo ? " (${ 'enemy'.tr() })" : ""),
                             style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -84,7 +92,7 @@ class AccionesScreen extends ConsumerWidget {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Clase: ${jugador.accionesClase} | Heroica: ${jugador.accionesHeroicas}',
+                            '${"class_button".tr()}: ${jugador.accionesClase} | ${"heroic_button".tr()}: ${jugador.accionesHeroicas}',
                             style: const TextStyle(fontSize: 14),
                           ),
                         ],
@@ -104,17 +112,13 @@ class AccionesScreen extends ConsumerWidget {
                               ),
                             ),
                             icon: const Icon(Icons.school, size: 18),
-                            label: const Text("Clase"),
+                            label: Text("class_button".tr()),
                             onPressed: () {
-                              final nuevoClase =
-                                  jugador.accionesClase + 1;
-                              ref
-                                  .read(jugadoresProvider.notifier)
-                                  .actualizarJugador(
-                                    index,
-                                    jugador.copyWith(
-                                        accionesClase: nuevoClase),
-                                  );
+                              final nuevoClase = jugador.accionesClase + 1;
+                              jugadoresNotifier.actualizarJugador(
+                                index,
+                                jugador.copyWith(accionesClase: nuevoClase),
+                              );
                             },
                           ),
                           const SizedBox(height: 6),
@@ -128,18 +132,13 @@ class AccionesScreen extends ConsumerWidget {
                               ),
                             ),
                             icon: const Icon(Icons.star, size: 18),
-                            label: const Text("Heroica"),
+                            label: Text("heroic_button".tr()),
                             onPressed: () {
-                              final nuevoHeroicas =
-                                  jugador.accionesHeroicas + 1;
-                              ref
-                                  .read(jugadoresProvider.notifier)
-                                  .actualizarJugador(
-                                    index,
-                                    jugador.copyWith(
-                                        accionesHeroicas:
-                                            nuevoHeroicas),
-                                  );
+                              final nuevoHeroicas = jugador.accionesHeroicas + 1;
+                              jugadoresNotifier.actualizarJugador(
+                                index,
+                                jugador.copyWith(accionesHeroicas: nuevoHeroicas),
+                              );
                             },
                           ),
                         ],

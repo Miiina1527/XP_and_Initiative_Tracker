@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:hive/hive.dart';
 import '../providers/jugadores_provider.dart';
-import '../utils/calculoxp.dart';
-import '../utils/tablaxp.dart';
 import '../models/jugador.dart';
+import '../utils/calculoxp.dart'; // Para detectar sistema de juego
 
 class SesionScreen extends ConsumerStatefulWidget {
-  const SesionScreen({super.key});
+  final int? campaignSlot;
+  const SesionScreen({super.key, this.campaignSlot});
 
   @override
   ConsumerState<SesionScreen> createState() => _SesionScreenState();
@@ -14,14 +16,39 @@ class SesionScreen extends ConsumerStatefulWidget {
 
 class _SesionScreenState extends ConsumerState<SesionScreen> {
   int crParty = 0;
-  int totalXP = 0;
+  SistemaJuego? sistemaDetectado;
+
+  // Configuración de XP por acciones según sistema
+  static const Map<SistemaJuego, Map<String, int>> xpPorAcciones = {
+    SistemaJuego.pathfinder1e: {
+      'accionClase': 25,
+      'accionHeroica': 50,
+    },
+    SistemaJuego.pathfinder2e: {
+      'accionClase': 2,
+      'accionHeroica': 4,
+    },
+    SistemaJuego.dnd5e: {
+      'accionClase': 15,
+      'accionHeroica': 30,
+    },
+    SistemaJuego.dnd5e2024: {
+      'accionClase': 15,
+      'accionHeroica': 30,
+    },
+  };
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final jugadoresNotifier = ref.read(jugadoresProvider.notifier);
-      final jugadores = ref.read(jugadoresProvider);
+    final hasSlotBox = widget.campaignSlot != null && Hive.isBoxOpen('jugadores_slot_${widget.campaignSlot}');
+    final jugadoresNotifier = hasSlotBox
+      ? ref.read(jugadoresProviderForSlot(widget.campaignSlot!).notifier)
+      : ref.read(jugadoresProvider.notifier);
+    final jugadores = hasSlotBox
+      ? ref.read(jugadoresProviderForSlot(widget.campaignSlot!))
+      : ref.read(jugadoresProvider);
 
       // Calcular el CR del grupo
       final cr = jugadoresNotifier.calcularCRParty(jugadores);
@@ -29,424 +56,386 @@ class _SesionScreenState extends ConsumerState<SesionScreen> {
         crParty = cr;
       });
 
+      jugadoresNotifier.guardarYReiniciarAcciones();
 
-      // Acumular acciones antes de calcular la experiencia final
-      List<Jugador> jugadoresActualizados = [];
-      for (int i = 0; i < jugadores.length; i++) {
-        final jugador = jugadores[i];
+      // Aplicar XP por acciones acumuladas antes de guardar
+      _aplicarXpPorAcciones();
+
+    });
+  }
+
+  // Función simple para obtener XP requerido por nivel (sistema estándar)
+  int _getXPParaNivel(int nivel) {
+    // Tabla estándar D&D 5e/Pathfinder simplificada
+    const xpPorNivel = {
+      1: 0,
+      2: 300,
+      3: 900,
+      4: 2700,
+      5: 6500,
+      6: 14000,
+      7: 23000,
+      8: 34000,
+      9: 48000,
+      10: 64000,
+      11: 85000,
+      12: 100000,
+      13: 120000,
+      14: 140000,
+      15: 165000,
+      16: 195000,
+      17: 225000,
+      18: 265000,
+      19: 305000,
+      20: 355000,
+    };
+    return xpPorNivel[nivel] ?? 355000;
+  }
+
+  // Detectar sistema de juego basado en los jugadores
+  SistemaJuego _detectarSistema(List<Jugador> jugadores) {
+    if (jugadores.isEmpty) return SistemaJuego.pathfinder1e; // Default
+    
+    // Heurística: si hay enemigos con niveles muy altos, probablemente sea Pathfinder
+    // Si hay niveles fraccionarios (almacenados como 0), probablemente sea D&D
+    final enemigos = jugadores.where((j) => j.esEnemigo).toList();
+    if (enemigos.isNotEmpty) {
+      final nivelesEnemigos = enemigos.map((e) => e.nivel).toList();
+      final tieneNivelesBajos = nivelesEnemigos.any((nivel) => nivel <= 0);
+      
+      if (tieneNivelesBajos) {
+        return SistemaJuego.dnd5e; // Default para D&D
+      }
+    }
+    
+    // Default Pathfinder 1e
+    return SistemaJuego.pathfinder1e;
+  }
+
+  // Obtener nombre legible del sistema
+  String _getNombreSistema(SistemaJuego sistema) {
+    switch (sistema) {
+      case SistemaJuego.pathfinder1e:
+        return "system_pathfinder_1e".tr();
+      case SistemaJuego.pathfinder2e:
+        return "system_pathfinder_2e".tr();
+      case SistemaJuego.dnd5e:
+        return "system_dnd_5e_2014".tr();
+      case SistemaJuego.dnd5e2024:
+        return "system_dnd_5e_2024".tr();
+    }
+  }
+
+  // Aplicar XP por acciones acumuladas
+  void _aplicarXpPorAcciones() {
+  final jugadores = widget.campaignSlot != null && Hive.isBoxOpen('jugadores_slot_${widget.campaignSlot}')
+  ? ref.read(jugadoresProviderForSlot(widget.campaignSlot!))
+  : ref.read(jugadoresProvider);
+    final sistema = _detectarSistema(jugadores);
+    final config = xpPorAcciones[sistema]!;
+    
+  final jugadoresNotifier = widget.campaignSlot != null && Hive.isBoxOpen('jugadores_slot_${widget.campaignSlot}')
+    ? ref.read(jugadoresProviderForSlot(widget.campaignSlot!).notifier)
+    : ref.read(jugadoresProvider.notifier);
+    
+    for (int i = 0; i < jugadores.length; i++) {
+      final jugador = jugadores[i];
+      if (jugador.esEnemigo) continue; // Solo jugadores, no enemigos
+      
+      final xpAccionesClase = jugador.accionesClaseAcumuladas * config['accionClase']!;
+      final xpAccionesHeroicas = jugador.accionesHeroicasAcumuladas * config['accionHeroica']!;
+      final xpTotalAcciones = xpAccionesClase + xpAccionesHeroicas;
+      
+      if (xpTotalAcciones > 0) {
         final actualizado = jugador.copyWith(
-          accionesClaseAcumuladas: jugador.accionesClaseAcumuladas + jugador.accionesClase,
-          accionesHeroicasAcumuladas: jugador.accionesHeroicasAcumuladas + jugador.accionesHeroicas,
-          accionesClase: 0,
-          accionesHeroicas: 0,
+          xp: jugador.xp + xpTotalAcciones,
+          gainedxp: jugador.gainedxp + xpTotalAcciones,
         );
         jugadoresNotifier.actualizarJugador(i, actualizado);
-        jugadoresActualizados.add(actualizado);
       }
-
-      // Calcular la experiencia final para los jugadores usando la lista actualizada
-      calcularXPFinal(
-        jugadores: jugadoresActualizados,
-        crParty: cr,
-      );
-
+    }
+    
+    setState(() {
+      sistemaDetectado = sistema;
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final jugadores = ref.watch(jugadoresProvider);
+    final jugadores = widget.campaignSlot != null && Hive.isBoxOpen('jugadores_slot_${widget.campaignSlot}')
+      ? ref.watch(jugadoresProviderForSlot(widget.campaignSlot!))
+      : ref.watch(jugadoresProvider);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Terminar Sesión'),
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFFF5F0E1), Color(0xFFE0D6C3)],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
+        title: Text("end_of_session".tr()),
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
         ),
-        child: jugadores.isEmpty
-            ? const Center(
-                child: Text(
-                  'No hay jugadores disponibles.',
-                  style: TextStyle(fontSize: 18),
+      ),
+      body: Column(
+        children: [
+          // Header con información del party
+          Container(
+            padding: const EdgeInsets.all(16),
+            margin: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.blue.shade200),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  "${"party_cr".tr()}: $crParty",
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              )
-            : Column(
-                children: [
-                  const SizedBox(height: 16),
-
-                  // Resumen de la sesión
-                  Card(
-                    margin: const EdgeInsets.symmetric(horizontal: 16),
-                    color: Colors.amber[100],
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        children: [
-                          Text(
-                            "Resumen de la Sesión",
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                          const SizedBox(height: 8),
-                          Text("Nivel del Grupo: $crParty"),
-                        ],
-                      ),
-                    ),
+                const SizedBox(height: 8),
+                Text(
+                  "${"players".tr()}: ${jugadores.length}",
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey.shade600,
                   ),
-
-                  const SizedBox(height: 12),
-
-                  // Lista de jugadores
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount: jugadores.length,
-                      itemBuilder: (context, index) {
-                        final jugador = jugadores[index];
-                        
-                        return Card(
-                          margin: const EdgeInsets.symmetric(
-                              vertical: 8, horizontal: 16),
-                          elevation: 4,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // Encabezado
-                                Row(
-                                  children: [
-                                    CircleAvatar(
-                                      backgroundColor: jugador.esEnemigo
-                                          ? Colors.redAccent
-                                          : Colors.blueAccent,
-                                      child: Icon(
-                                        jugador.esEnemigo
-                                            ? Icons.warning
-                                            : Icons.person,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Text(
-                                        jugador.nombre,
-                                        style: const TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-
-                                const SizedBox(height: 10),
-
-                                // XP y Nivel
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text("Nivel: ${jugador.nivel}"),
-                                    Text("XP Total: ${jugador.xp}"),
-                                  ],
-                                ),
-                                
-                                const SizedBox(height: 8),
-
-                                // XP ganada en esta sesión
-                                Text(
-                                  "+${jugador.xpAcumulada} XP en esta sesión",
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.green,
-                                  ),
-                                ),
-                                 const SizedBox(height: 12),
-
-                                 // Barra Clase 1 - Amber
-                                 Builder(
-                                   builder: (context) {
-                                     final nivelClase = jugador.nivelClase1;
-                                     final xpParaSubir = calcularXpPorClase(
-                                       nivelClase1: nivelClase + 1,
-                                       nivelClase2: jugador.nivelClase2,
-                                       nivelClase3: jugador.nivelClase3,
-                                     )["clase1"] ?? 0;
-                                     final xpDisponible = jugador.xp - (calcularXpPorClase(
-                                       nivelClase1: nivelClase,
-                                       nivelClase2: jugador.nivelClase2,
-                                       nivelClase3: jugador.nivelClase3,
-                                     )["clase2"] ?? 0) - (calcularXpPorClase(
-                                       nivelClase1: nivelClase,
-                                       nivelClase2: jugador.nivelClase2,
-                                       nivelClase3: jugador.nivelClase3,
-                                     )["clase3"] ?? 0);
-                                     final progreso = xpParaSubir > 0
-                                         ? (xpDisponible / xpParaSubir).clamp(0.0, 1.0)
-                                         : 1.0;
-                                     final puedeSubir = xpDisponible >= xpParaSubir;
-                                     return Column(
-                                       crossAxisAlignment: CrossAxisAlignment.start,
-                                       children: [
-                                         Row(
-                                           children: [
-                                             const Expanded(
-                                               child: Text(
-                                                 'Clase 1: Nivel',
-                                                 style: TextStyle(fontWeight: FontWeight.w500),
-                                               ),
-                                             ),
-                                             Text('$nivelClase'),
-                                             ElevatedButton(
-                                               style: ElevatedButton.styleFrom(
-                                                 backgroundColor: puedeSubir ? Colors.green : Colors.grey,
-                                                 minimumSize: const Size(36, 36),
-                                                 padding: EdgeInsets.zero,
-                                                 shape: RoundedRectangleBorder(
-                                                   borderRadius: BorderRadius.circular(8),
-                                                 ),
-                                               ),
-                                               onPressed: puedeSubir
-                                                   ? () {
-                                                       final jugadoresNotifier = ref.read(jugadoresProvider.notifier);
-                                                       final actualizado = jugador.copyWith(
-                                                         nivelClase1: nivelClase + 1,
-                                                         xp: (jugador.xp - xpParaSubir).toInt(),
-                                                       );
-                                                       jugadoresNotifier.actualizarJugador(index, actualizado);
-                                                     }
-                                                   : null,
-                                               child: const Icon(Icons.arrow_upward, color: Colors.white, size: 20),
-                                             ),
-                                           ],
-                                         ),
-                                         const SizedBox(height: 4),
-                                         LinearProgressIndicator(
-                                           value: progreso,
-                                           minHeight: 10,
-                                           backgroundColor: Colors.grey[300],
-                                           color: Colors.amber,
-                                         ),
-                                         Padding(
-                                           padding: const EdgeInsets.symmetric(vertical: 2.0),
-                                           child: Text(
-                                             'XP: ${xpDisponible.toInt()} / $xpParaSubir (Falta: ${(xpParaSubir - xpDisponible).toInt()})',
-                                             style: const TextStyle(fontSize: 12),
-                                           ),
-                                         ),
-                                         const SizedBox(height: 8),
-                                       ],
-                                     );
-                                   },
-                                 ),
-
-                                 // Barra Clase 2 - Pink
-                                 Builder(
-                                   builder: (context) {
-                                     final nivelClase = jugador.nivelClase2;
-                                     final xpParaSubir = calcularXpPorClase(
-                                       nivelClase1: jugador.nivelClase1,
-                                       nivelClase2: nivelClase + 1,
-                                       nivelClase3: jugador.nivelClase3,
-                                     )["clase2"] ?? 0;
-                                     final xpDisponible = jugador.xp - (calcularXpPorClase(
-                                       nivelClase1: jugador.nivelClase1,
-                                       nivelClase2: nivelClase,
-                                       nivelClase3: jugador.nivelClase3,
-                                     )["clase1"] ?? 0) - (calcularXpPorClase(
-                                       nivelClase1: jugador.nivelClase1,
-                                       nivelClase2: nivelClase,
-                                       nivelClase3: jugador.nivelClase3,
-                                     )["clase3"] ?? 0);
-                                     final progreso = xpParaSubir > 0
-                                         ? (xpDisponible / xpParaSubir).clamp(0.0, 1.0)
-                                         : 1.0;
-                                     final puedeSubir = xpDisponible >= xpParaSubir;
-                                     return Column(
-                                       crossAxisAlignment: CrossAxisAlignment.start,
-                                       children: [
-                                         Row(
-                                           children: [
-                                             const Expanded(
-                                               child: Text(
-                                                 'Clase 2: Nivel',
-                                                 style: TextStyle(fontWeight: FontWeight.w500),
-                                               ),
-                                             ),
-                                             Text('$nivelClase'),
-                                             ElevatedButton(
-                                               style: ElevatedButton.styleFrom(
-                                                 backgroundColor: puedeSubir ? Colors.green : Colors.grey,
-                                                 minimumSize: const Size(36, 36),
-                                                 padding: EdgeInsets.zero,
-                                                 shape: RoundedRectangleBorder(
-                                                   borderRadius: BorderRadius.circular(8),
-                                                 ),
-                                               ),
-                                               onPressed: puedeSubir
-                                                   ? () {
-                                                       final jugadoresNotifier = ref.read(jugadoresProvider.notifier);
-                                                       final actualizado = jugador.copyWith(
-                                                         nivelClase2: nivelClase + 1,
-                                                         xp: (jugador.xp - xpParaSubir).toInt(),
-                                                       );
-                                                       jugadoresNotifier.actualizarJugador(index, actualizado);
-                                                     }
-                                                   : null,
-                                               child: const Icon(Icons.arrow_upward, color: Colors.white, size: 20),
-                                             ),
-                                           ],
-                                         ),
-                                         const SizedBox(height: 4),
-                                         LinearProgressIndicator(
-                                           value: progreso,
-                                           minHeight: 10,
-                                           backgroundColor: Colors.grey[300],
-                                           color: Colors.pink,
-                                         ),
-                                         Padding(
-                                           padding: const EdgeInsets.symmetric(vertical: 2.0),
-                                           child: Text(
-                                             'XP: ${xpDisponible.toInt()} / $xpParaSubir (Falta: ${(xpParaSubir - xpDisponible).toInt()})',
-                                             style: const TextStyle(fontSize: 12),
-                                           ),
-                                         ),
-                                         const SizedBox(height: 8),
-                                       ],
-                                     );
-                                   },
-                                 ),
-
-                                 // Barra Clase 3 - Cyan
-                                 Builder(
-                                   builder: (context) {
-                                     final nivelClase = jugador.nivelClase3;
-                                     final xpParaSubir = calcularXpPorClase(
-                                       nivelClase1: jugador.nivelClase1,
-                                       nivelClase2: jugador.nivelClase2,
-                                       nivelClase3: nivelClase + 1,
-                                     )["clase3"] ?? 0;
-                                     final xpDisponible = jugador.xp - (calcularXpPorClase(
-                                       nivelClase1: jugador.nivelClase1,
-                                       nivelClase2: jugador.nivelClase2,
-                                       nivelClase3: nivelClase,
-                                     )["clase1"] ?? 0) - (calcularXpPorClase(
-                                       nivelClase1: jugador.nivelClase1,
-                                       nivelClase2: jugador.nivelClase2,
-                                       nivelClase3: nivelClase,
-                                     )["clase2"] ?? 0);
-                                     final progreso = xpParaSubir > 0
-                                         ? (xpDisponible / xpParaSubir).clamp(0.0, 1.0)
-                                         : 1.0;
-                                     final puedeSubir = xpDisponible >= xpParaSubir;
-                                     return Column(
-                                       crossAxisAlignment: CrossAxisAlignment.start,
-                                       children: [
-                                         Row(
-                                           children: [
-                                             const Expanded(
-                                               child: Text(
-                                                 'Clase 3: Nivel',
-                                                 style: TextStyle(fontWeight: FontWeight.w500),
-                                               ),
-                                             ),
-                                             Text('$nivelClase'),
-                                             ElevatedButton(
-                                               style: ElevatedButton.styleFrom(
-                                                 backgroundColor: puedeSubir ? Colors.green : Colors.grey,
-                                                 minimumSize: const Size(36, 36),
-                                                 padding: EdgeInsets.zero,
-                                                 shape: RoundedRectangleBorder(
-                                                   borderRadius: BorderRadius.circular(8),
-                                                 ),
-                                               ),
-                                               onPressed: puedeSubir
-                                                   ? () {
-                                                       final jugadoresNotifier = ref.read(jugadoresProvider.notifier);
-                                                       final actualizado = jugador.copyWith(
-                                                         nivelClase3: nivelClase + 1,
-                                                         xp: (jugador.xp - xpParaSubir).toInt(),
-                                                       );
-                                                       jugadoresNotifier.actualizarJugador(index, actualizado);
-                                                     }
-                                                   : null,
-                                               child: const Icon(Icons.arrow_upward, color: Colors.white, size: 20),
-                                             ),
-                                           ],
-                                         ),
-                                         const SizedBox(height: 4),
-                                         LinearProgressIndicator(
-                                           value: progreso,
-                                           minHeight: 10,
-                                           backgroundColor: Colors.grey[300],
-                                           color: Colors.cyan,
-                                         ),
-                                         Padding(
-                                           padding: const EdgeInsets.symmetric(vertical: 2.0),
-                                           child: Text(
-                                             'XP: ${xpDisponible.toInt()} / $xpParaSubir (Falta: ${(xpParaSubir - xpDisponible).toInt()})',
-                                             style: const TextStyle(fontSize: 12),
-                                           ),
-                                         ),
-                                         const SizedBox(height: 8),
-                                       ],
-                                     );
-                                   },
-                                 ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
+                ),
+                if (sistemaDetectado != null) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade100,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.orange.shade300),
                     ),
-                  ),
-
-                  // Botón para cerrar sesión
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(50),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
+                    child: Text(
+                      "${"detected_system".tr()}: ${_getNombreSistema(sistemaDetectado!)}",
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.orange.shade800,
+                        fontWeight: FontWeight.w600,
                       ),
-                      icon: const Icon(Icons.logout),
-                      label: const Text("Cerrar Sesión"),
-                      onPressed: () {
-                        final jugadoresNotifier = ref.read(jugadoresProvider.notifier);
-                        final jugadores = ref.read(jugadoresProvider);
-                        int acumulado = 0;
-                        for (int i = 0; i < jugadores.length; i++) {
-                          final actualizado = jugadores[i].copyWith(
-                            xpAcumulada: 0,
-                            gainedxp: 0,
-                            accionesClaseAcumuladas: 0,
-                            accionesHeroicasAcumuladas: 0,
-                            died: false,
-                          );
-                          jugadoresNotifier.actualizarJugador(i, actualizado);
-                        }
-                        setState(() {
-                          totalXP = acumulado;
-                        });
-                        Navigator.of(context).popUntil((route) => route.isFirst);
-                      },
                     ),
                   ),
                 ],
+              ],
+            ),
+          ),
+
+          // Lista de jugadores con sistema oficial simplificado
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: jugadores.length,
+              itemBuilder: (context, index) {
+                final jugador = jugadores[index];
+                final nivelActual = jugador.nivel;
+                final xpActual = jugador.xp;
+                final xpParaSiguienteNivel = _getXPParaNivel(nivelActual + 1);
+                final xpNivelActual = _getXPParaNivel(nivelActual);
+                final xpProgreso = xpActual - xpNivelActual;
+                final xpNecesario = xpParaSiguienteNivel - xpNivelActual;
+                final progreso = xpNecesario > 0 ? (xpProgreso / xpNecesario).clamp(0.0, 1.0) : 1.0;
+                final puedeSubir = xpActual >= xpParaSiguienteNivel && nivelActual < 20;
+
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Nombre y nivel del jugador
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                jugador.nombre,
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.shade100,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                "${"level".tr()} $nivelActual",
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.blue,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+
+                        // XP ganado en esta sesión
+                        if (jugador.gainedxp > 0) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.green.shade100,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              "+${jugador.gainedxp} ${"xp_gained_this_session".tr()}",
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: Colors.green,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+
+                        // Desglose de XP por acciones (si hay sistema detectado)
+                        if (sistemaDetectado != null && 
+                            (jugador.accionesClaseAcumuladas > 0 || jugador.accionesHeroicasAcumuladas > 0)) ...[
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.purple.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.purple.shade200),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "bonus_xp_for_actions".tr(),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.purple.shade800,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                if (jugador.accionesClaseAcumuladas > 0)
+                                  Text(
+                                    "• ${jugador.accionesClaseAcumuladas} ${"class_actions_count".tr()} = +${jugador.accionesClaseAcumuladas * xpPorAcciones[sistemaDetectado]!['accionClase']!} XP",
+                                    style: const TextStyle(fontSize: 11),
+                                  ),
+                                if (jugador.accionesHeroicasAcumuladas > 0)
+                                  Text(
+                                    "• ${jugador.accionesHeroicasAcumuladas} ${"heroic_actions_count".tr()} = +${jugador.accionesHeroicasAcumuladas * xpPorAcciones[sistemaDetectado]!['accionHeroica']!} XP",
+                                    style: const TextStyle(fontSize: 11),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+
+                        // Progreso de nivel (sistema oficial)
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "${"progress_to_level".tr()} ${nivelActual + 1}",
+                                    style: const TextStyle(fontWeight: FontWeight.w500),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  LinearProgressIndicator(
+                                    value: progreso,
+                                    minHeight: 10,
+                                    backgroundColor: Colors.grey[300],
+                                    color: puedeSubir ? Colors.green : Colors.blue,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    "XP: $xpActual / $xpParaSiguienteNivel",
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            // Botón de subir nivel
+                            if (puedeSubir)
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.green,
+                                  minimumSize: const Size(80, 36),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                                onPressed: () {
+                                  final hasSlot = widget.campaignSlot != null && Hive.isBoxOpen('jugadores_slot_${widget.campaignSlot}');
+                                  final jugadoresNotifierLocal = hasSlot
+                                    ? ref.read(jugadoresProviderForSlot(widget.campaignSlot!).notifier)
+                                    : ref.read(jugadoresProvider.notifier);
+                                  final actualizado = jugador.copyWith(
+                                    nivel: nivelActual + 1,
+                                  );
+                                  jugadoresNotifierLocal.actualizarJugador(index, actualizado);
+                                },
+                                child: Text(
+                                  "level_up_button".tr(),
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+
+          // Botón para cerrar sesión
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size.fromHeight(50),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
+              icon: const Icon(Icons.logout),
+              label: Text("close_session".tr()),
+              onPressed: () {
+                final hasSlot = widget.campaignSlot != null && Hive.isBoxOpen('jugadores_slot_${widget.campaignSlot}');
+                final jugadoresNotifier = hasSlot
+                  ? ref.read(jugadoresProviderForSlot(widget.campaignSlot!).notifier)
+                  : ref.read(jugadoresProvider.notifier);
+                final jugadores = hasSlot
+                  ? ref.read(jugadoresProviderForSlot(widget.campaignSlot!))
+                  : ref.read(jugadoresProvider);
+
+                // Limpiar datos de sesión
+                for (int i = 0; i < jugadores.length; i++) {
+                  final actualizado = jugadores[i].copyWith(
+                    xpAcumulada: 0,
+                    gainedxp: 0,
+                    accionesClaseAcumuladas: 0,
+                    accionesHeroicasAcumuladas: 0,
+                    died: false,
+                  );
+                  jugadoresNotifier.actualizarJugador(i, actualizado);
+                }
+
+                Navigator.of(context).popUntil((route) => route.isFirst);
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
