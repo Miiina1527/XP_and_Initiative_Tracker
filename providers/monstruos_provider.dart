@@ -33,3 +33,13 @@ final monstruosProvider = StateNotifierProvider<MonstruosNotifier, List<Monster>
   final box = Hive.box<Monster>('custom_monsters');
   return MonstruosNotifier(box);
 });
+
+// Family provider for per-slot custom monsters
+final monstruosProviderForSlot = StateNotifierProvider.family<MonstruosNotifier, List<Monster>, int>((ref, slot) {
+  final boxName = 'custom_monsters_slot_$slot';
+  if (!Hive.isBoxOpen(boxName)) {
+    Hive.openBox<Monster>(boxName);
+  }
+  final box = Hive.box<Monster>(boxName);
+  return MonstruosNotifier(box);
+});

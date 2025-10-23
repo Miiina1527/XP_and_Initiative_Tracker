@@ -65,6 +65,10 @@ class CombateNotifier extends StateNotifier<CombateState> {
         .where((j) => j.esEnemigo)
         .every((j) => j.hp <= 0);
   }
+
+  void actualizarOrdenIniciativa(List<dynamic> nuevaOrden) {
+    state = state.copiarCon(ordenIniciativa: nuevaOrden.cast<Jugador>());
+  }
 }
 
 final combateProvider = StateNotifierProvider<CombateNotifier, CombateState>((ref) {

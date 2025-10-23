@@ -1,27 +1,34 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
 import '../models/jugador.dart';
+import '../utils/calculoxp.dart'; // Importar para usar SistemaXP y funciones oficiales
 
-// Acceso global a la box de Hive
+// Legacy/global box accessor kept for backward compatibility
 final jugadoresBox = Hive.box<Jugador>('jugadores');
 
 class JugadoresNotifier extends StateNotifier<List<Jugador>> {
-  // Inicializa el estado con los valores actuales de Hive
-  JugadoresNotifier() : super(jugadoresBox.values.toList());
+  final Box<Jugador> box;
+
+  // Inicializa el estado con los valores actuales de la box proporcionada
+  JugadoresNotifier(this.box) : super(box.values.toList());
+
+  void recargar() {
+    state = box.values.toList();
+  }
 
   void agregarJugador(Jugador j) {
-    jugadoresBox.add(j);
-    state = jugadoresBox.values.toList();
+    box.add(j);
+    recargar();
   }
 
   void actualizarJugador(int index, Jugador j) {
-    jugadoresBox.putAt(index, j);
-    state = jugadoresBox.values.toList();
+    box.putAt(index, j);
+    recargar();
   }
 
   void eliminarJugador(int index) {
-    jugadoresBox.deleteAt(index);
-    state = jugadoresBox.values.toList();
+    box.deleteAt(index);
+    recargar();
   }
 
   // Eliminar enemigos del estado global
@@ -50,39 +57,41 @@ class JugadoresNotifier extends StateNotifier<List<Jugador>> {
     state = jugadoresBox.values.toList();
   }
 
-  // Calcular experiencia del combate y acumularla
-  void calcularYAcumularXpCombate({
-    required int crEnemigos,
-    required int crParty,
+  // NUEVO: Calcular experiencia oficial de Pathfinder y D&D
+  void calcularYAcumularXpOficial({
+    required SistemaJuego sistema,
+    String? dificultadManual,
   }) {
-    // Calcular el daño total infligido por todos los jugadores
-    int totalDanio = 0;
-    for (final jugador in state) {
-      totalDanio += jugador.danoHecho;
-    }
+    // Calcular dificultad automáticamente
+    final dificultad = dificultadManual ?? calcularDificultadUnificada(
+      jugadores: state,
+      sistema: sistema,
+    );
 
-    // Calcular el multiplicador basado en la diferencia de CR
-    int multiplicador = (crEnemigos - crParty);
-    if (multiplicador < 1) multiplicador = 1;
+    // Calcular XP por jugador usando el sistema oficial
+    final xpPorJugador = calcularXPUnificado(
+      jugadores: state,
+      sistema: sistema,
+      dificultadManual: dificultad,
+    );
 
-    // Iterar sobre cada jugador para calcular su experiencia
+    // Solo actualizar jugadores del party (no enemigos)
     for (int i = 0; i < state.length; i++) {
       final jugador = state[i];
-      // Calcular el porcentaje de daño hecho por el jugador
-      double porcentajeDanio = totalDanio > 0 ? jugador.danoHecho / totalDanio : 0;
-
-      // Calcular las acciones realizadas por el jugador
-      int acciones = jugador.accionesClase + (2 * jugador.accionesHeroicas);
-
-      // Calcular la experiencia ganada por el jugador
-      int xpJugador = ((porcentajeDanio * 100).round() + acciones) * multiplicador;
-
-      final actualizado = jugador.copyWith(
-        gainedxp: jugador.gainedxp + xpJugador,
-        danoHecho: 0,
-      );
-      jugadoresBox.putAt(i, actualizado);
+      
+      if (!jugador.esEnemigo) {
+        final actualizado = jugador.copyWith(
+          gainedxp: jugador.gainedxp + xpPorJugador,
+          danoHecho: 0, // Resetear daño después del combate
+        );
+        jugadoresBox.putAt(i, actualizado);
+      } else {
+        // Para enemigos, solo resetear daño
+        final actualizado = jugador.copyWith(danoHecho: 0);
+        jugadoresBox.putAt(i, actualizado);
+      }
     }
+    
     state = jugadoresBox.values.toList();
   }
 
@@ -113,7 +122,17 @@ class JugadoresNotifier extends StateNotifier<List<Jugador>> {
   }
 }
 
-final jugadoresProvider =
-    StateNotifierProvider<JugadoresNotifier, List<Jugador>>(
-  (ref) => JugadoresNotifier(),
+final jugadoresProvider = StateNotifierProvider<JugadoresNotifier, List<Jugador>>(
+  (ref) => JugadoresNotifier(jugadoresBox),
 );
+
+// Family provider for per-slot jugadores boxes. Usage: ref.watch(jugadoresProviderForSlot(slot))
+final jugadoresProviderForSlot = StateNotifierProvider.family<JugadoresNotifier, List<Jugador>, int>((ref, slot) {
+  final boxName = 'jugadores_slot_$slot';
+  // Open the box if not already open (synchronously if possible)
+  if (!Hive.isBoxOpen(boxName)) {
+    Hive.openBox<Jugador>(boxName);
+  }
+  final box = Hive.box<Jugador>(boxName);
+  return JugadoresNotifier(box);
+});
