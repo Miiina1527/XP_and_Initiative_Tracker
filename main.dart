@@ -1,33 +1,51 @@
 import 'package:flutter/material.dart';
+import 'dart:math' as math;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/adapters.dart';
-import 'package:xp_and_initiative_tracker/models/jugador.dart';
-import 'package:xp_and_initiative_tracker/models/monster.dart'; // Importar el modelo Monster
-import 'screens/datos_screen.dart';
-import 'screens/combate_screen.dart';
-import 'screens/sesion_screen.dart';
-import 'screens/acciones_screen.dart';
-import 'screens/iniciativa_screen.dart';
-import 'screens/detalles_jugadores_screen.dart';
-import 'screens/fondos_screen.dart';
-import 'screens/monsterdb_screen.dart';
-import 'screens/gM_screen.dart'; // Importar la nueva pantalla gM_screen.dart
-import 'dart:typed_data';
+import 'package:easy_localization/easy_localization.dart';
+
+import 'models/jugador.dart';
+import 'models/monster.dart';
+import 'models/campaign.dart';
+import 'providers/campaigns_provider.dart';
+import 'screens/campaign_main_screen.dart';
+import 'screens/extras_screen.dart';
+import 'providers/settings_provider.dart';
+import 'screens/todo_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await EasyLocalization.ensureInitialized();
+
   await Hive.initFlutter();
 
-  Hive.registerAdapter(JugadorAdapter()); // tu clase adaptadora generada
-  Hive.registerAdapter(MonsterAdapter()); // registrar el adapter de Monster
+  Hive.registerAdapter(JugadorAdapter());
+  Hive.registerAdapter(MonsterAdapter());
+  Hive.registerAdapter(CampaignAdapter());
+
+  try {
+    Hive.registerAdapter(CampaignAdapter());
+  } catch (_) {}
 
   await Hive.openBox<Jugador>('jugadores');
   await Hive.openBox<Jugador>('enemigos_plantilla');
-  await Hive.openBox<Monster>('custom_monsters'); // abrir la box de monstruos personalizados
+  await Hive.openBox<Monster>('custom_monsters');
+  // ensure settings box exists for extras flag
+  await Hive.openBox('settings');
 
   runApp(
-    const ProviderScope(
-      child: PathfinderTrackerApp(),
+    EasyLocalization(
+      supportedLocales: const [
+        Locale('en'),
+        Locale('es'),
+        Locale('fr'),
+        Locale('de'),
+        Locale('ja'),
+        Locale('it'),
+      ],
+      path: 'assets/translations',
+      fallbackLocale: const Locale('en'),
+      child: const ProviderScope(child: PathfinderTrackerApp()),
     ),
   );
 }
@@ -38,219 +56,346 @@ class PathfinderTrackerApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Pathfinder XP Tracker',
+      title: 'app_title'.tr(),
+      localizationsDelegates: context.localizationDelegates,
+      supportedLocales: context.supportedLocales,
+      locale: context.locale,
       theme: ThemeData(
-        fontFamily: 'NotoSerifJP', // fuente japonesa
+        fontFamily: 'NotoSerifJP',
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.red),
       ),
-      initialRoute: '/',
-      routes: {
-        '/': (_) => const HomeScreen(),
-        '/datos': (_) => const DatosScreen(),
-        '/combate': (_) => const CombateScreen(),
-        '/sesion': (_) => const SesionScreen(),
-        '/iniciativa': (_) => const IniciativaScreen(),
-        '/acciones': (_) => const AccionesScreen(),
-        '/detalles': (_) => const DetallesJugadoresScreen(),
-        '/fondos': (_) => const FondosScreen(),
-      },
+      home: const HomeScreen(),
     );
   }
 }
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
-
-  @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends State<HomeScreen> {
-  void _abrirMonsterDbScreen(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => MonsterDbScreen(onAddMonster: (_) {}),
-      ),
-    );
-  }
-  Uint8List? fondoHome;
-  bool _loading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadFondo();
-  }
-
-  Future<void> _loadFondo() async {
-    final box = await Hive.openBox('fondos');
-    setState(() {
-      fondoHome = box.get('fondoHome');
-      _loading = false;
-    });
-  }
-
-  Future<void> _goToFondosScreen(BuildContext context) async {
-    await Navigator.pushNamed(context, '/fondos');
-    // Al volver de fondos_screen, recargar fondo
-    _loadFondo();
-  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
-        children: [
-          _loading
-              ? Container(color: Colors.black)
-              : (fondoHome != null
-                  ? Image.memory(
-                      fondoHome!,
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                      height: double.infinity,
-                    )
-                  : Container(color: Colors.black)),
-          Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Botón pequeño de monstruos a la izquierda de todo
-                    SizedBox(
-                      width: 48,
-                      height: 48,
-                      child: Material(
-                        color: Colors.red.shade700,
-                        borderRadius: BorderRadius.circular(12),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(12),
-                          splashColor: Colors.redAccent.withOpacity(0.5),
-                          highlightColor: Colors.red.withOpacity(0.2),
-                          onTap: () => _abrirMonsterDbScreen(context),
-                          child: const Icon(Icons.pest_control, color: Colors.white, size: 28),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        MenuButton(
-                          icon: Icons.storage,
-                          text: "Datos",
-                          onTap: () => Navigator.pushNamed(context, '/datos'),
-                        ),
-                        const SizedBox(height: 14),
-                        MenuButton(
-                          icon: Icons.shield,
-                          text: "Iniciativa y Combate",
-                          onTap: () => Navigator.pushNamed(context, '/iniciativa'),
-                        ),
-                        const SizedBox(height: 14),
-                        MenuButton(
-                          icon: Icons.flash_on,
-                          text: "Acciones",
-                          onTap: () => Navigator.pushNamed(context, '/acciones'),
-                        ),
-                        const SizedBox(height: 14),
-                        MenuButton(
-                          icon: Icons.flag,
-                          text: "Terminar Sesión",
-                          onTap: () => Navigator.pushNamed(context, '/sesion'),
-                        ),
-                        const SizedBox(height: 14),
-                        MenuButton(
-                          icon: Icons.people,
-                          text: "Detalles de Jugadores",
-                          onTap: () => Navigator.pushNamed(context, '/detalles'),
-                        ),
-                        const SizedBox(height: 14),
-                        MenuButton(
-                          icon: Icons.screen_share,
-                          text: "GM Screen",
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (context) => const GMScreen()),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                    const SizedBox(width: 16),
-                    // Botón de fondo de pantalla pequeño a la derecha
-                    SizedBox(
-                      width: 48,
-                      height: 48,
-                      child: Material(
-                        color: Colors.red.shade700,
-                        borderRadius: BorderRadius.circular(12),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(12),
-                          splashColor: Colors.redAccent.withOpacity(0.5),
-                          highlightColor: Colors.red.withOpacity(0.2),
-                          onTap: () => _goToFondosScreen(context),
-                          child: const Icon(Icons.camera_alt, color: Colors.white, size: 28),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+      backgroundColor: const Color(0xFFFAF3E0),
+      appBar: AppBar(
+        title: Text('app_title'.tr()),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.list),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TodoScreen())),
+          ),
+        ],
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size.fromHeight(52),
+                backgroundColor: Colors.red.shade700,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              // icon intentionally removed to reduce vertical clutter on small devices
+              icon: const SizedBox.shrink(),
+              label: Text('View campaigns'.tr()),
+              onPressed: () {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const CampaignSelectorScreen()));
+              },
             ),
+            const SizedBox(height: 18),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size.fromHeight(44),
+                backgroundColor: Colors.amber.shade700,
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              icon: const Icon(Icons.extension),
+              label: Text('Extras'),
+              onPressed: () {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const ExtrasScreen()));
+              },
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size.fromHeight(44),
+                backgroundColor: Colors.grey.shade800,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              icon: const Icon(Icons.description),
+              label: Text('Create character sheets'.tr()),
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('under_development'.tr())));
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class CampaignSelectorScreen extends ConsumerWidget {
+  const CampaignSelectorScreen({super.key});
+
+  Future<void> _showCreateOrEditDialog(BuildContext context, WidgetRef ref, int slot, {Campaign? existing}) async {
+    final nameController = TextEditingController(text: existing?.name ?? '');
+    String system = existing?.system ?? 'pf1';
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(existing == null ? 'Create campaign'.tr() : 'Edit campaign'.tr()),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: InputDecoration(labelText: 'Name'.tr()),
+            ),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              value: system,
+              items: [
+                DropdownMenuItem(value: 'pf1', child: Text('system_pathfinder_1e'.tr())),
+                DropdownMenuItem(value: 'pf2', child: Text('system_pathfinder_2e'.tr())),
+                DropdownMenuItem(value: 'dnd5', child: Text('system_dnd_5e_2014'.tr())),
+                if (ref.read(settingsProvider).extrasUnlocked)
+                  DropdownMenuItem(value: 'pf_jp_miiina', child: const Text('Pathfinder 日本 Miiina')),
+              ],
+              onChanged: (v) {
+                if (v != null) system = v;
+              },
+              decoration: InputDecoration(labelText: 'System'.tr()),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: Text('Cancel'.tr())),
+          ElevatedButton(
+            onPressed: () async {
+              final name = nameController.text.trim();
+              if (name.isEmpty) return; // simple validation
+
+              if (existing == null) {
+                final ok = await ref.read(campaignsProvider.notifier).createCampaign(slot, name, system);
+                if (!ok) {
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not create campaign'.tr())));
+                  return;
+                }
+              } else {
+                final updated = Campaign(slot: slot, name: name, system: system, createdAt: existing.createdAt);
+                await ref.read(campaignsProvider.notifier).updateCampaign(slot, updated);
+              }
+
+              if (!context.mounted) return;
+              Navigator.of(context).pop();
+            },
+            child: Text(existing == null ? 'Create'.tr() : 'Save'.tr()),
           ),
         ],
       ),
     );
   }
-}
-
-/// Un botón de menú personalizado con efecto "tinta roja"
-class MenuButton extends StatelessWidget {
-  final IconData icon;
-  final String text;
-  final VoidCallback onTap;
-
-  const MenuButton({
-    super.key,
-    required this.icon,
-    required this.text,
-    required this.onTap,
-  });
 
   @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 250, // ancho controlado
-      height: 50,
-      child: Material(
-        color: Colors.red.shade700,
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          // ignore: deprecated_member_use
-          splashColor: Colors.redAccent.withOpacity(0.5), // tinta roja
-          // ignore: deprecated_member_use
-          highlightColor: Colors.red.withOpacity(0.2),
-          onTap: onTap,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: Colors.white),
-              const SizedBox(width: 10),
-              Text(
-                text,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                ),
-              ),
-            ],
+  Widget build(BuildContext context, WidgetRef ref) {
+    final campaigns = ref.watch(campaignsProvider);
+
+    return Scaffold(
+      appBar: AppBar(title: Text('Select Campaign'.tr())),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isPortrait = MediaQuery.of(context).orientation == Orientation.portrait;
+              final availableHeight = constraints.maxHeight;
+              final cardHeight = math.max(150.0, (availableHeight - 48) / 4);
+
+              if (isPortrait) {
+                return ListView.builder(
+                  itemCount: 4,
+                  padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewPadding.bottom + 88, top: 8),
+                  itemBuilder: (context, index) {
+                    final camp = (index < campaigns.length) ? campaigns[index] : null;
+                    return SizedBox(
+                      height: cardHeight,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
+                        child: Card(
+                          clipBehavior: Clip.antiAlias,
+                          elevation: 4,
+                          child: Padding(
+                            padding: const EdgeInsets.all(10),
+                            child: SingleChildScrollView(
+                              physics: const BouncingScrollPhysics(),
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(minHeight: cardHeight - 8),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const SizedBox(height: 6),
+                                    if (camp == null) ...[
+                                      Text('slot_label'.tr(args: ['${index + 1}'])),
+                                      const SizedBox(height: 6),
+                                      ElevatedButton(
+                                        style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 14), minimumSize: Size(0, 36)),
+                                        onPressed: () => _showCreateOrEditDialog(context, ref, index),
+                                        child: Text('Create campaign'.tr(), style: const TextStyle(fontSize: 14)),
+                                      ),
+                                    ] else ...[
+                                      Text(camp.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                                      const SizedBox(height: 4),
+                                      Text(camp.system, style: const TextStyle(color: Colors.grey)),
+                                      const SizedBox(height: 10),
+                                      Wrap(
+                                        spacing: 8,
+                                        runSpacing: 6,
+                                        alignment: WrapAlignment.center,
+                                        children: [
+                                          ElevatedButton(
+                                            style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12), minimumSize: Size(0, 36)),
+                                            onPressed: () {
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(builder: (_) => CampaignMainScreen(campaignSlot: index)),
+                                              );
+                                            },
+                                            child: Text('Open'.tr(), style: const TextStyle(fontSize: 14)),
+                                          ),
+                                          OutlinedButton(
+                                            style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12), minimumSize: Size(0, 36)),
+                                            onPressed: () => _showCreateOrEditDialog(context, ref, index, existing: camp),
+                                            child: Text('Edit'.tr(), style: const TextStyle(fontSize: 14)),
+                                          ),
+                                          TextButton(
+                                            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12), minimumSize: Size(0, 36)),
+                                            onPressed: () async {
+                                              final confirm = await showDialog<bool>(
+                                                context: context,
+                                                builder: (ctx) => AlertDialog(
+                                                  title: Text('Delete campaign'.tr()),
+                                                  content: Text('Are you sure you want to delete this campaign and its data?'.tr()),
+                                                  actions: [
+                                                    TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text('Cancel'.tr())),
+                                                    ElevatedButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text('Delete'.tr())),
+                                                  ],
+                                                ),
+                                              );
+                                              if (confirm == true) {
+                                                await ref.read(campaignsProvider.notifier).deleteCampaign(index);
+                                              }
+                                            },
+                                            child: Text('Delete'.tr(), style: const TextStyle(color: Colors.red, fontSize: 14)),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                );
+              } else {
+                return GridView.builder(
+                  itemCount: 4,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 16,
+                    crossAxisSpacing: 16,
+                    childAspectRatio: 1.4,
+                  ),
+                  padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewPadding.bottom + 88),
+                  itemBuilder: (context, index) {
+                    final camp = (index < campaigns.length) ? campaigns[index] : null;
+                    return Card(
+                      elevation: 4,
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: SingleChildScrollView(
+                          physics: const BouncingScrollPhysics(),
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(minHeight: 120),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const SizedBox(height: 8),
+                                if (camp == null) ...[
+                                  Text('slot_label'.tr(args: ['${index + 1}'])),
+                                  const SizedBox(height: 8),
+                                  ElevatedButton(
+                                    onPressed: () => _showCreateOrEditDialog(context, ref, index),
+                                    child: Text('Create campaign'.tr()),
+                                  ),
+                                ] else ...[
+                                  Text(camp.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                                  const SizedBox(height: 6),
+                                  Text(camp.system, style: const TextStyle(color: Colors.grey)),
+                                  const SizedBox(height: 12),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 6,
+                                    alignment: WrapAlignment.center,
+                                    children: [
+                                      ElevatedButton(
+                                        onPressed: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(builder: (_) => CampaignMainScreen(campaignSlot: index)),
+                                          );
+                                        },
+                                        child: Text('Open'.tr()),
+                                      ),
+                                      OutlinedButton(
+                                        onPressed: () => _showCreateOrEditDialog(context, ref, index, existing: camp),
+                                        child: Text('Edit'.tr()),
+                                      ),
+                                      TextButton(
+                                        onPressed: () async {
+                                          final confirm = await showDialog<bool>(
+                                            context: context,
+                                            builder: (ctx) => AlertDialog(
+                                              title: Text('Delete campaign'.tr()),
+                                              content: Text('Are you sure you want to delete this campaign and its data?'.tr()),
+                                              actions: [
+                                                TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text('Cancel'.tr())),
+                                                ElevatedButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text('Delete'.tr())),
+                                              ],
+                                            ),
+                                          );
+                                          if (confirm == true) {
+                                            await ref.read(campaignsProvider.notifier).deleteCampaign(index);
+                                          }
+                                        },
+                                        child: Text('Delete'.tr(), style: const TextStyle(color: Colors.red)),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                );
+              }
+            },
           ),
         ),
       ),
