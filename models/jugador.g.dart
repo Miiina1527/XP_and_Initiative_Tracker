@@ -21,32 +21,27 @@ class JugadorAdapter extends TypeAdapter<Jugador> {
       hp: fields[1] as int,
       maxHp: fields[2] as int,
       ac: fields[3] as int,
-      nivelClase1: fields[4] as int,
-      nivelClase2: fields[5] as int,
-      nivelClase3: fields[6] as int,
-      esEnemigo: fields[7] as bool,
-      accionesClase: fields[8] as int,
-      accionesHeroicas: fields[9] as int,
-      danoHecho: fields[10] as int,
-      died: fields[15] as bool,
-      accionesClaseAcumuladas: fields[16] as int,
-      accionesHeroicasAcumuladas: fields[17] as int,
-      gainedxp: fields[18] as int,
-      xpAcumulada: fields[20] as int,
-      iniciativa: fields[19] as int,
-      xp: fields[11] as int,
-      xpClase1: fields[12] as int,
-      xpClase2: fields[13] as int,
-      xpClase3: fields[14] as int,
-      att: fields[21] as String?,
-      movs: fields[22] as String?,
+      nivel: fields[4] as int,
+      esEnemigo: fields[5] as bool,
+      accionesClase: fields[6] as int,
+      accionesHeroicas: fields[7] as int,
+      danoHecho: fields[8] as int,
+      died: fields[10] as bool,
+      accionesClaseAcumuladas: fields[11] as int,
+      accionesHeroicasAcumuladas: fields[12] as int,
+      gainedxp: fields[13] as int,
+      xpAcumulada: fields[15] as int,
+      iniciativa: fields[14] as int,
+      xp: fields[9] as int,
+      att: fields[16] as String?,
+      movs: fields[17] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, Jugador obj) {
     writer
-      ..writeByte(23)
+      ..writeByte(18)
       ..writeByte(0)
       ..write(obj.nombre)
       ..writeByte(1)
@@ -56,42 +51,32 @@ class JugadorAdapter extends TypeAdapter<Jugador> {
       ..writeByte(3)
       ..write(obj.ac)
       ..writeByte(4)
-      ..write(obj.nivelClase1)
+      ..write(obj.nivel)
       ..writeByte(5)
-      ..write(obj.nivelClase2)
-      ..writeByte(6)
-      ..write(obj.nivelClase3)
-      ..writeByte(7)
       ..write(obj.esEnemigo)
-      ..writeByte(8)
+      ..writeByte(6)
       ..write(obj.accionesClase)
-      ..writeByte(9)
+      ..writeByte(7)
       ..write(obj.accionesHeroicas)
-      ..writeByte(10)
+      ..writeByte(8)
       ..write(obj.danoHecho)
-      ..writeByte(11)
+      ..writeByte(9)
       ..write(obj.xp)
-      ..writeByte(12)
-      ..write(obj.xpClase1)
-      ..writeByte(13)
-      ..write(obj.xpClase2)
-      ..writeByte(14)
-      ..write(obj.xpClase3)
-      ..writeByte(15)
+      ..writeByte(10)
       ..write(obj.died)
-      ..writeByte(16)
+      ..writeByte(11)
       ..write(obj.accionesClaseAcumuladas)
-      ..writeByte(17)
+      ..writeByte(12)
       ..write(obj.accionesHeroicasAcumuladas)
-      ..writeByte(18)
+      ..writeByte(13)
       ..write(obj.gainedxp)
-      ..writeByte(19)
+      ..writeByte(14)
       ..write(obj.iniciativa)
-      ..writeByte(20)
+      ..writeByte(15)
       ..write(obj.xpAcumulada)
-      ..writeByte(21)
+      ..writeByte(16)
       ..write(obj.att)
-      ..writeByte(22)
+      ..writeByte(17)
       ..write(obj.movs);
   }
 
